@@ -331,6 +331,7 @@ subplot(122);imagesc(ind2rgb(greenMapRef,gray(256))); hold on;
 imagesc(fcMapWarped,'AlphaData',fcMapWarped.*1); colormap jet; clim([0 1]);
 axis image off; colorbar;title('Recording-wise FC map');
 
+%% checking checking
 
 
 
