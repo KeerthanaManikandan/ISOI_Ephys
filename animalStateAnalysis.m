@@ -117,16 +117,16 @@ for iFile = 1:length(fileNum)
     idx = freqValsSpec>=30 & freqValsSpec<=80;
 
     % Z-score the eeg relative to the first 100s of the recording
-    specVals = 20.*log10(spec(:,idx)); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
-    animalStateCheckW(iFile) = median(20.*log10(eegPSDCW(100:120,iFile)),'all','omitnan');%median(specVals,'all'); %#ok<SAGROW>
+    specVals = 10.*log10(spec(:,idx)); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
+    animalStateCheckW(iFile) = median(10.*log10(eegPSDCW(100:120,iFile)),'all','omitnan');%median(specVals,'all'); %#ok<SAGROW>
 end 
 
-% figure;plot(1:120,20.*log10(eegPSDCW(:,1)))
-% hold on; box off;plot(1:120,20.*log10(eegPSDCW(:,3)));
+% figure;plot(1:120,10.*log10(eegPSDCW(:,1)))
+% hold on; box off;plot(1:120,10.*log10(eegPSDCW(:,3)));
 % ylim([-50 100]); yticks(-50:10:100);xticks(0:10:120);
 % ylabel('Power (dB)'); xlabel('Frequency (Hz)');
 
-d = 20.*log10(eegPSDCW(:,1)) - 20.*log10(eegPSDCW(:,3));
+d = 10.*log10(eegPSDCW(:,1)) - 10.*log10(eegPSDCW(:,3));
 % Maximum difference occurs at 22 Hz. 
 % Hence choosing frequencies between 17-27 Hz - 22+/- 5Hz
 
@@ -134,7 +134,7 @@ animalStateIso = [1.2 2.25 3.25 1];
 figure; scatter(animalStateIso,animalStateCheckW,'filled');
 
 specOnly = {specAllCW(:).spec}; 
-specMedian = 20.*log10(cell2mat(cellfun(@(x) median(x,1,'omitnan'),specOnly,'un',0)'));
+specMedian = 10.*log10(cell2mat(cellfun(@(x) median(x,1,'omitnan'),specOnly,'un',0)'));
 
 diffLightDeep = (specMedian(1,:)- specMedian(3,:))';
 diffLightSemi = (specMedian(1,:)- specMedian(2,:))';
@@ -275,9 +275,9 @@ for iM = 1:2
             idx = freqValsSpec>=80 & freqValsSpec<=100;
 
             % Z-score the eeg relative to the first 100s of the recording
-            specVals = 20.*log10(spec(:,idx)); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
+            specVals = 10.*log10(spec(:,idx)); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
 %             animalStateCheck(iDate,iRun) = median(specVals,'all','omitnan'); %#ok<SAGROW>
-            animalStateCheck(iDate,iRun) = median(20.*log10(eegPSD(80:120,iDate,iRun)),'all','omitnan');
+            animalStateCheck(iDate,iRun) = median(10.*log10(eegPSD(80:120,iDate,iRun)),'all','omitnan');
         end   
 
     end
@@ -300,21 +300,21 @@ bordeauxLight = [squeeze(eegB(:,1,[1 3])) squeeze(eegB(:,2,1)) squeeze(eegB(:,3,
 bordeauxSemi  = [squeeze(eegB(:,1,4)) squeeze(eegB(:,3,2))];
 bordeauxDeep  = [squeeze(eegB(:,1,2))];
 
-medBordeauxLight = 20.*log10(median(bordeauxLight(:,4:5),2,'omitnan')); 
-medBordeauxSemi  = 20.*log10(bordeauxSemi(:,2));
+medBordeauxLight = 10.*log10(median(bordeauxLight(:,4:5),2,'omitnan')); 
+medBordeauxSemi  = 10.*log10(bordeauxSemi(:,2));
 d = medBordeauxLight - medBordeauxSemi; 
 
-medL = 20.*log10(median(bordeauxLight(:,1:3),2,'omitnan'));
-medD  = 20.*log10(bordeauxDeep);
+medL = 10.*log10(median(bordeauxLight(:,1:3),2,'omitnan'));
+medD  = 10.*log10(bordeauxDeep);
 dB = medL - medD;
 
 bordeauxLightSpec = cat(3,squeeze(specB(:,:,1,[1 3])),squeeze(specB(:,:,2,1)),squeeze(specB(:,:,3,[1 3])));
 bordeauxSemiSpec  = cat(3, squeeze(specB(:,:,1,4)),squeeze(specB(:,:,3,2)));
 bordeauxDeepSpec  = squeeze(specB(:,:,1,2));
 
-medBordeauxLightSpec = 20.*log10(median(bordeauxLightSpec(:,:,1:3),3,'omitnan'));
-medBordeauxSemiSpec  = 20.*log10(bordeauxSemiSpec(:,:,1));
-medBordeauxDeepSpec  = 20.*log10(bordeauxDeepSpec); 
+medBordeauxLightSpec = 10.*log10(median(bordeauxLightSpec(:,:,1:3),3,'omitnan'));
+medBordeauxSemiSpec  = 10.*log10(bordeauxSemiSpec(:,:,1));
+medBordeauxDeepSpec  = 10.*log10(bordeauxDeepSpec); 
 
 lightPowersB = median(medBordeauxLightSpec,1,'omitnan');
 semiPowersB  = median(medBordeauxSemiSpec,1,'omitnan');
@@ -326,17 +326,17 @@ ramboLight = [squeeze(eegR(:,1,[1 4])) squeeze(eegR(:,2,[1 3]))] ;
 ramboSemi  = [squeeze(eegR(:,1,2)) squeeze(eegR(:,2,4))] ; 
 ramboDeep  = [squeeze(eegR(:,1,3)) squeeze(eegR(:,2,2))] ; 
 
-medRamboLight = 20.*log10(median(ramboLight,2,'omitnan'));
-medRamboDeep  = 20.*log10(median(ramboDeep,2,'omitnan'));
+medRamboLight = 10.*log10(median(ramboLight,2,'omitnan'));
+medRamboDeep  = 10.*log10(median(ramboDeep,2,'omitnan'));
 dR = medRamboLight - medRamboDeep; 
 
 ramboLightSpec = cat(3,squeeze(specR(:,:,1,[1 4])),squeeze(specR(:,:,2,[1 3]))) ; 
 ramboSemiSpec  = cat(3,squeeze(specR(:,:,1,2)),squeeze(specR(:,:,2,4))) ; 
 ramboDeepSpec  = cat(3,squeeze(specR(:,:,1,3)),squeeze(specR(:,:,2,2))) ; 
 
-medRamboLightSpec = 20.*log10(median(ramboLightSpec,3,'omitnan'));
-medRamboSemiSpec  = 20.*log10(median(ramboSemiSpec,3,'omitnan'));
-medRamboDeepSpec  = 20.*log10(median(ramboDeepSpec,3,'omitnan')); 
+medRamboLightSpec = 10.*log10(median(ramboLightSpec,3,'omitnan'));
+medRamboSemiSpec  = 10.*log10(median(ramboSemiSpec,3,'omitnan'));
+medRamboDeepSpec  = 10.*log10(median(ramboDeepSpec,3,'omitnan')); 
 
 lightPowersR = median(medRamboLightSpec,1,'omitnan');
 semiPowersR  = median(medRamboSemiSpec,1,'omitnan');
@@ -477,7 +477,7 @@ for iM = 1:2
 % 
 %             % Z-score the eeg relative to the first 100s of the recording
 %             specVals = spec(:,idx); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
-            eegMaxPow(iDate,iRun) = real(20.*log10(median(eegCh(100:120,:),'all','omitnan'))); 
+            eegMaxPow(iDate,iRun) = real(10.*log10(median(eegCh(100:120,:),'all','omitnan'))); 
         end
     end
 

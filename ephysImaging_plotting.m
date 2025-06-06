@@ -493,8 +493,9 @@ for iM = 1:3
    sgtitle(monkeyName); 
 end 
 
- [pSpCorr,tblSpCorr,statsSpCorr] = anova1([superMid(:,iBand) midDeep(:,iBand) superDeep(:,iBand) controls(:,iBand-1)],{'S/M';'M/D';'S/D';'Controls'});
- [rSpCorr,mSpCorr,~,gnamesSpCorr] = multcompare(statsSpCorr,"Alpha",0.01,"CriticalValueType","bonferroni");
+iBand = 4;
+[pSpCorr,tblSpCorr,statsSpCorr] = anova1([superMid(:,iBand) midDeep(:,iBand) superDeep(:,iBand) controls(:,iBand-1)],{'S/M';'M/D';'S/D';'Controls'});
+[rSpCorr,mSpCorr,~,gnamesSpCorr] = multcompare(statsSpCorr,"Alpha",0.01,"CriticalValueType","bonferroni");
 
 
 %% Show correlations between hybrids across frequencies for a layer compartment 
