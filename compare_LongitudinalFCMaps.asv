@@ -43,7 +43,7 @@ if isempty(dir(dataDir)); cDriveFlag = 1; end
 % Get greens and masks
 [greenTemp,elecMask,clipMaskCortex,corrMask]= getGreensAndMasks(serverPath,dataDir,templateDir,expDate,runName,runNames00);
 
-% Get image registration parameters
+% Get variables pertaining to image registration
 if exist([dataDir '\imRegisMaster.mat'],'file') || exist(['C:\Users\kem294\Documents\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate  '\imageRegisPoints_RS.mat'],'file')
     if ~cDriveFlag
         regisPoints = load([dataDir '\imRegisMaster.mat'],'movPointsTemp','fixedPointsTemp','OTemp','spacingTemp');
@@ -68,7 +68,6 @@ else % Map points to perform registration
     end
 end
 
-% Perform registration from one session to average map
 [OTemp,spacingTemp,~] = point_registration(size(greenMapRef),fliplr(movPointsTemp),fliplr(fixedPointsTemp));
 
 % Find points to place the grid
@@ -82,7 +81,7 @@ y = linspace(1,imSize(2),10);
 corrMaskTemp = imresize(corrMask,imSize);
 seedRad =  round(roiSize{5}(1)); % seed radius for FC map- 500um
 
-% check if any of the points are on a vessel/sulci or are out of the image
+% check if any of the points are on a vessel or are out of the image
 clear point seedLocNonLinear
 iPoint = 1;
 for iRow = 1:10
@@ -107,13 +106,14 @@ if ~exist(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\avgCorrMapContr
     end
         save(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\avgCorrMapControls_grid.mat'],'corrMapFinal','seedLocNonLinear');
 
-else % Load the saved average FC map and seed locations
-    corrMapFinal = load(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\avgCorrMapControls_grid.mat']);
+else
+    corrMapFinal = load(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\avgCorrMapControls.mat']);
     seedLocNonLinear  = corrMapFinal.seedLocNonLinear;
     corrMapFinal = corrMapFinal.corrMapFinal;
+
 end
 
-%% Obtain the session-wise FC map for the chosen sessions
+%% Load the recording-wise data and compute FC maps for 20 seeds 
 for iDate = 1:size(checkDates,1)
     clear expDate dataDir templateDir
     expDate    = checkDates(iDate,:);
@@ -141,6 +141,8 @@ for iDate = 1:size(checkDates,1)
     numFiles    = length(dir([dataDir '\Spatial Downsample SS3' '/*.mat']));
     datName     = 'Data_RS_10Hz_SS3_';
 
+    fileInfo    = dir(dataDir);
+
     % Get greens and masks
     [greenTemp,elecMask,clipMaskCortex,corrMask]= getGreensAndMasks(serverPath,dataDir,templateDir,expDate,runName,runNames00);
    
@@ -153,7 +155,7 @@ for iDate = 1:size(checkDates,1)
         serverDataPath = [serverPath expDate '\' runName];
     end
 
-    % Store rs-ISOI data if not saved already
+    % Store rs-ISOI data
     if ~exist([dataDir '\processedFrames.mat'],'file')
         clear tempBandPass
         disp(['Processing imaging data for ' monkeyName ' ' expDate ' File: ' num2str(fileNum)]);
@@ -162,17 +164,16 @@ for iDate = 1:size(checkDates,1)
         save([dataDir '\processedFrames.mat'],'tempBandPass');
         processedDat{iDate,1} = matfile([dataDir '\processedFrames.mat']); clear tempBandPass;
 
-    else % Retrieve processed data        
+    else
+        % Retrieve processed data
         disp(['Loading imaging data for ' monkeyName ' ' expDate ' File: ' num2str(fileNum)]);
         processedDat{iDate,1} = matfile([dataDir '\processedFrames.mat']);
     end
 
     cd(commonDir);
-
     clear pDatTemp fcMap seedLoc seedSig OTemp spacingTemp
 
-    % Get rs-ISOI data
-    pDatTemp = processedDat{iDate,1}.tempBandPass; 
+    pDatTemp = processedDat{iDate,1}.tempBandPass; % Get rs-ISOI data
 
     % Perform nonlinear registration
     clear regisPoints
@@ -233,19 +234,18 @@ for iDate = 1:size(checkDates,1)
         end
     end
 end
-
-% Remove seeds #44 and #51 as they are on the lateral sulcus
+% Remove seeds #44 and #51 as they are on the lateral sulcus and masks did
 corrFC_Avg_SessionWise([44 51],:) = NaN;
 
 %% Plot the correlations between session-wise and average FC maps
-% Plot the seeds chosen on the average green vessel map
+% Plot the seeds chosen
 figure;imagesc(greenMapRef); hold on;plot(seedLocNonLinear(:,2),seedLocNonLinear(:,1),'.w','MarkerSize',20)
 colormap gray;axis image off;
 
 % Plot the correlations 
 numSeeds = size(corrFC_Avg_SessionWise,1);
 
-figure; % Show the distribution
+figure;% Show the distribution
 x1 = (reshape(repmat(1:5,[numSeeds 1]),[numSeeds*5 1]));
 y1 = reshape(corrFC_Avg_SessionWise,[numSeeds*5 1]);
 s = swarmchart(x1,y1,20,[0 0.4470 0.7410]); 
@@ -256,7 +256,7 @@ boxplot(corrFC_Avg_SessionWise,'Labels',{0, 4, 16, 20, 23});
 xlabel('Months'); ylabel('Correlations between session and average FC');
 box off;ylim([0 1]); 
 
-% ANOVA to compare the distributions
+% Statistical analysis
 [pSpCorrT,tblSpCorrT,statsSpCorrT] = anova1(corrFC_Avg_SessionWise,{'0', '4', '16', '20', '23'},'off');
 [rSpCorrT,mSpCorrT,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.001);
 

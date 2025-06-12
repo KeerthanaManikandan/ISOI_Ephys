@@ -26,12 +26,12 @@ for iDate = 1:size(allDates,1)
         fileNum    = str2double(datFileNum(iRun,end));
 
         % Get the directory and filenames
-        dataDir     = ['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
+        dataDir     = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
         if ~exist(dataDir,'dir'); [~,~] = mkdir(dataDir); end
 
         numFiles    = length(dir([dataDir '\Spatial Downsample SS3' '/*.mat'])); % loading the downsampled data only
         datName     = 'Data_RS_10Hz_SS3_';
-        templateDir = ['X:\Data\' monkeyName '_SqM\Left Hemisphere\'];
+        templateDir = ['D:\Data\' monkeyName '_SqM\Left Hemisphere\'];
         fileInfo    = dir(dataDir);
 
         % Check if greens exist in the data folder
@@ -178,7 +178,7 @@ for iDate = 1:size(allDates,1)
         clear entityInfo datFileName timeStamp
         % Load all run information
         runName    = allRuns{iDate,1}(iRun,:);
-        saveFolder = ['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\Electrophysiology\Processed Data'];
+        saveFolder = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\Electrophysiology\Processed Data'];
         datFileNum = ephysFileNameAll{iDate,1};
         fileNum    = str2double(datFileNum(iRun,end));
 
@@ -239,7 +239,7 @@ for iDate = 1:size(allDates,1)
     for iRun =  1:size(allRuns{iDate,1},1)
         clear  runName dataDir probeCh transitionCh probeTemp
         runName    = allRuns{iDate,1}(iRun,:);
-        dataDir    = ['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
+        dataDir    = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
 
         % Determine the bad time segments and bad channels in LFP data
         disp(['Identifying noisy data from LFP for:  ' allDates(iDate,:) ' ' runName]);

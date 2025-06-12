@@ -9,6 +9,7 @@ addpath(genpath([commonDir '\Codes\Ephys']));
 addpath(genpath([commonDir '\Codes\Imaging']));
 addpath(genpath([commonDir '\Codes\chronux_2_12']));
 rmpath(genpath([commonDir '\Codes\chronux_2_12\fly_track\videoIO']));
+rmpath('C:\Users\KEM294\Documents\Data\Codes\chronux_2_12\spectral_analysis\continuous\dupes')
 
 %% Load ISOI_Ephys data
 clear allMonkeyVars
@@ -76,21 +77,26 @@ monkeyName  = 'Whiskey';
 hemisphere = 'Left';
 saveFolder = ['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\Electrophysiology\Processed Data'];
 
+gammaBand   = [30 90]; [bG,aG] = butter(3,gammaBand./(1e3/2),'bandpass'); % Gamma band filtering parameters
 params.Fs       = 1e3; % PSD parameter initiation
-params.fpass    = [1 120];
+params.fpass    = [2 120];
 params.pad      = -1;
 params.tapers   = [3 5];
 params.trialave = 0;
+paramsNew = params;
+% paramsNew.fpass = [2 120];
 
 eegPSD = NaN(120,length(fileNum));
+animalStateIso = [1.2 2.25 3.25 1];
+
 for iFile = 1:length(fileNum)
     clear eegCh eegPSDT
     var =  load([saveFolder '\datafile000'  num2str(fileNum(iFile)) '_lfp.mat']);
     eegCh = var.eegCh;
 
     clear spec powMeansS badTimeThresh badTimeIndOld badTimeInd
-    [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegCh,[5 2],params);
-
+    [spec,timeValsSpec,~] = mtspecgramc(eegCh,[5 3],params); 
+    
     powMeanS = squeeze(sum(spec,2));
     badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1));
     badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3;
@@ -106,65 +112,43 @@ for iFile = 1:length(fileNum)
     end
 
     eegCh(badTimes,:) = [];
-    [eegPSDT,psdFreq]  = mtspectrumc(buffer(eegCh,1000),params);
+%     [spec, freqValsSpec,t] = spectrogram(eegCh,128,120,0:120,1000,'yaxis');
+%     cumPowFreq = cumsum(abs(spec),1);
+%     mat = cumPowFreq>= 0.9.*cumPowFreq(end,:);
+%     [~,highPowerIdx] = max(mat,[],1);
 
-    eegPSDCW(:,iFile)= median(eegPSDT,2);
+    [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegCh,[2 1],paramsNew);
+    cumPowFreq = cumsum(spec,2);
+    mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+    [~,highPowerIdx] = max(mat,[],2);
 
-    [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegCh,[5 2],params);
-    specAllCW(iFile).spec = spec; specAllCW(iFile).timeVals = timeValsSpec; specAllCW(iFile).freqVals = freqValsSpec;
+%     figure; imagesc(timeValsSpec,freqValsSpec,20.*log10(spec'));
+%     set(gca,'YDir','normal'); colorbar; colormap jet; caxis([0 100]);
+%     title(['Anesthesia: ' num2str(animalStateIso(iFile))]); hold on;
+%     plot(timeValsSpec,freqValsSpec(highPowerIdx),'w','LineWidth',2);    
 
+    meanFreqW(iFile) = median(freqValsSpec(highPowerIdx)); 
     % Get power for frequencies from 17-27 Hz
-    idx = freqValsSpec>=30 & freqValsSpec<=80;
+    idx = freqValsSpec>=20 & freqValsSpec<=60;
 
-    % Z-score the eeg relative to the first 100s of the recording
-    specVals = 10.*log10(spec(:,idx)); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
-    animalStateCheckW(iFile) = median(10.*log10(eegPSDCW(100:120,iFile)),'all','omitnan');%median(specVals,'all'); %#ok<SAGROW>
-end 
+    animalStateCheckW(iFile) = median(20.*log10(spec(:,idx)),'all','omitnan');
+end
 
-% figure;plot(1:120,10.*log10(eegPSDCW(:,1)))
-% hold on; box off;plot(1:120,10.*log10(eegPSDCW(:,3)));
-% ylim([-50 100]); yticks(-50:10:100);xticks(0:10:120);
-% ylabel('Power (dB)'); xlabel('Frequency (Hz)');
-
-d = 10.*log10(eegPSDCW(:,1)) - 10.*log10(eegPSDCW(:,3));
-% Maximum difference occurs at 22 Hz. 
-% Hence choosing frequencies between 17-27 Hz - 22+/- 5Hz
-
-animalStateIso = [1.2 2.25 3.25 1];
+figure; scatter(animalStateIso,meanFreqW,45,[1 2 3 1],'filled'); xlabel('Iso %'); ylabel('Edge frequency');
 figure; scatter(animalStateIso,animalStateCheckW,'filled');
 
-specOnly = {specAllCW(:).spec}; 
-specMedian = 10.*log10(cell2mat(cellfun(@(x) median(x,1,'omitnan'),specOnly,'un',0)'));
-
-diffLightDeep = (specMedian(1,:)- specMedian(3,:))';
-diffLightSemi = (specMedian(1,:)- specMedian(2,:))';
-
-%% Getting the envelope of gamma band and plotting the psd - Whiskey
-gammaBand   = [30 90]; [bG,aG] = butter(3,gammaBand./(1e3/2),'bandpass'); % Gamma band filtering parameters
-
-var =  load([saveFolder '\datafile000'  num2str(fileNum(1)) '_lfp.mat']);
-eegLight = var.eegCh;eegLight = envelope(filtfilt(bG,aG,eegLight),100,'peak');
-
-var =  load([saveFolder '\datafile000'  num2str(fileNum(2)) '_lfp.mat']);
-eegSemi = var.eegCh; eegSemi = envelope(filtfilt(bG,aG,eegSemi),100,'peak');
-
-var =  load([saveFolder '\datafile000'  num2str(fileNum(3)) '_lfp.mat']);
-eegDeep = var.eegCh;eegDeep = envelope(filtfilt(bG,aG,eegDeep),100,'peak');
+%% Get data from Bordeaux and Rambo
+fs        = 1e3;
+gammaBand = [30 90]; [bG,aG] = butter(3,gammaBand./(fs/2),'bandpass'); % Gamma band filtering parameters
 
 params.Fs       = 1e3; % PSD parameter initiation
-params.fpass    = [0 30];
+params.fpass    = [2 120];
 params.pad      = -1;
 params.tapers   = [3 5];
 params.trialave = 0;
 
-[lightPow,~] = mtspectrumc(buffer(eegLight,1000),params); lightPow = median(lightPow,2);
-[semiPow,~]  = mtspectrumc(buffer(eegSemi,1000),params); semiPow = median(semiPow,2);
-[deepPow,psdFreq]  = mtspectrumc(buffer(eegDeep,1000),params); deepPow= median(deepPow,2);
-
-
-%% Get data from Bordeaux and Rambo
 for iM = 1:2
-    clear monkeyName allDates allRuns rippleName isoLevels eegPSD specAll animalStateCheck
+    clear monkeyName allDates allRuns rippleName meanFreq isoLevels eegPSD specAll animalStateCheck powEnvelope
     switch iM
         case 1
             monkeyName = '15-18_Bordeaux';
@@ -253,68 +237,74 @@ for iM = 1:2
 
             eegChT(badTimes,:) = [];
             eegCh(:,iRun) = eegChT(1:500e3);
-        end   
-          
-        
-%         clear eegChNorm
-%         if size(eegCh,2)~=1
-%             eegChNorm = (eegCh - median(eegCh,2,'omitnan'))./mad(eegCh,1,2);
-%         else
-            eegChNorm = eegCh;
-%         end
+        end           
+
+        eegChNorm = eegCh;
 
         for iRun = 1:size(allRuns{iDate},1)
-            [eegPSDT,psdFreq]  = mtspectrumc(buffer(eegChNorm(:,iRun),1000),params);
+            clear eegChT 
+            eegChT = (eegChNorm(:,iRun));
+            [eegPSDT,psdFreq]  = mtspectrumc(buffer(eegChT,1000),params);
             eegPSD(:,iDate,iRun)= median(eegPSDT,2,'omitnan');
+            
+            paramsNew = params;%paramsNew.fpass = [2 120];
+            [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegChT,[2 1],paramsNew);
+            cumPowFreq = cumsum(spec,2);
+            mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+            [~,highPowerIdx] = max(mat,[],2);
 
-            [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegChNorm(:,iRun),[5 2],params);
+%             [s,freqValsSpec,~,~] = spectrogram(eegChT,128,120,256,1000,'yaxis');           
+%             cumPowFreq = cumsum(abs(s'),2);
+%             figure; imagesc(timeValsSpec,freqValsSpec,20.*log10(spec'));
+%             set(gca,'YDir','normal'); colorbar; colormap jet; caxis([0 100]);
+% figure; histogram(freqValsSpec(highPowerIdx));
+% title(strrep([monkeyName ': ' expDate ' run:' num2str(iRun)],'_','\_')); hold on;
+%             plot(timeValsSpec,freqValsSpec(highPowerIdx),'w','LineWidth',2);
+
+            meanFreq(iDate,iRun) = median(freqValsSpec(highPowerIdx));
             specAll(:,:,iDate,iRun)= spec; %specAll(iDate,iRun).timeVals = timeValsSpec;
-            %specAll(iDate,iRun).freqVals = freqValsSpec;
-
-            % Get power for frequencies from 17-27 Hz
-            idx = freqValsSpec>=80 & freqValsSpec<=100;
-
-            % Z-score the eeg relative to the first 100s of the recording
-            specVals = 10.*log10(spec(:,idx)); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
-%             animalStateCheck(iDate,iRun) = median(specVals,'all','omitnan'); %#ok<SAGROW>
-            animalStateCheck(iDate,iRun) = median(10.*log10(eegPSD(80:120,iDate,iRun)),'all','omitnan');
-        end   
+% 
+            animalStateCheck(iDate,iRun) = median(20.*log10(eegPSD(20:60,iDate,iRun)),'all','omitnan');        
+        end
 
     end
 
     switch iM
         case 1
-            eegB  = eegPSD;%reshape(eegPSD,[120 size(eegPSD,2)*size(eegPSD,3)]);
-            specB = specAll; %reshape(specAll,[size(eegPSD,2)*size(eegPSD,3) 1]);
+            eegB  = eegPSD;
+            specB = specAll; 
             isoB  = [1.1 2.25 1.25 1.75; 0.6 NaN NaN NaN; 1 2 1 NaN];%reshape([1.1 2.25 1.25 1.75; 0.6 NaN NaN NaN; 1 2 1 NaN],[size(eegPSD,2)*size(eegPSD,3) 1]);
             animalB = animalStateCheck; 
+            meanFreqB = meanFreq;
         case 2
-            eegR  = eegPSD; %reshape(eegPSD,[120 size(eegPSD,2)*size(eegPSD,3)]);
-            specR = specAll; %reshape(specAll,[size(eegPSD,2)*size(eegPSD,3) 1]);
-            isoR  = [0.9 2 2 1; 1.5 2 1.4 1.9];%reshape([0.9 2 2 1; 1.5 2 1.4 1.9],[size(eegPSD,2)*size(eegPSD,3) 1]);
+            eegR  = eegPSD; 
+            specR = specAll; 
+            isoR  = [0.9 2 2 1; 1.5 2 1.4 1.9];
             animalR = animalStateCheck;
+            meanFreqR = meanFreq; 
     end
 end 
+
 
 bordeauxLight = [squeeze(eegB(:,1,[1 3])) squeeze(eegB(:,2,1)) squeeze(eegB(:,3,[1 3]))];
 bordeauxSemi  = [squeeze(eegB(:,1,4)) squeeze(eegB(:,3,2))];
 bordeauxDeep  = [squeeze(eegB(:,1,2))];
 
-medBordeauxLight = 10.*log10(median(bordeauxLight(:,4:5),2,'omitnan')); 
-medBordeauxSemi  = 10.*log10(bordeauxSemi(:,2));
+medBordeauxLight = 20.*log10(median(bordeauxLight(:,4:5),2,'omitnan')); 
+medBordeauxSemi  = 20.*log10(bordeauxSemi(:,2));
 d = medBordeauxLight - medBordeauxSemi; 
 
-medL = 10.*log10(median(bordeauxLight(:,1:3),2,'omitnan'));
-medD  = 10.*log10(bordeauxDeep);
+medL = 20.*log10(median(bordeauxLight(:,1:3),2,'omitnan'));
+medD  = 20.*log10(bordeauxDeep);
 dB = medL - medD;
 
 bordeauxLightSpec = cat(3,squeeze(specB(:,:,1,[1 3])),squeeze(specB(:,:,2,1)),squeeze(specB(:,:,3,[1 3])));
 bordeauxSemiSpec  = cat(3, squeeze(specB(:,:,1,4)),squeeze(specB(:,:,3,2)));
 bordeauxDeepSpec  = squeeze(specB(:,:,1,2));
 
-medBordeauxLightSpec = 10.*log10(median(bordeauxLightSpec(:,:,1:3),3,'omitnan'));
-medBordeauxSemiSpec  = 10.*log10(bordeauxSemiSpec(:,:,1));
-medBordeauxDeepSpec  = 10.*log10(bordeauxDeepSpec); 
+medBordeauxLightSpec = 20.*log10(median(bordeauxLightSpec(:,:,1:3),3,'omitnan'));
+medBordeauxSemiSpec  = 20.*log10(bordeauxSemiSpec(:,:,1));
+medBordeauxDeepSpec  = 20.*log10(bordeauxDeepSpec); 
 
 lightPowersB = median(medBordeauxLightSpec,1,'omitnan');
 semiPowersB  = median(medBordeauxSemiSpec,1,'omitnan');
@@ -326,17 +316,17 @@ ramboLight = [squeeze(eegR(:,1,[1 4])) squeeze(eegR(:,2,[1 3]))] ;
 ramboSemi  = [squeeze(eegR(:,1,2)) squeeze(eegR(:,2,4))] ; 
 ramboDeep  = [squeeze(eegR(:,1,3)) squeeze(eegR(:,2,2))] ; 
 
-medRamboLight = 10.*log10(median(ramboLight,2,'omitnan'));
-medRamboDeep  = 10.*log10(median(ramboDeep,2,'omitnan'));
+medRamboLight = 20.*log10(median(ramboLight,2,'omitnan'));
+medRamboDeep  = 20.*log10(median(ramboDeep,2,'omitnan'));
 dR = medRamboLight - medRamboDeep; 
 
 ramboLightSpec = cat(3,squeeze(specR(:,:,1,[1 4])),squeeze(specR(:,:,2,[1 3]))) ; 
 ramboSemiSpec  = cat(3,squeeze(specR(:,:,1,2)),squeeze(specR(:,:,2,4))) ; 
 ramboDeepSpec  = cat(3,squeeze(specR(:,:,1,3)),squeeze(specR(:,:,2,2))) ; 
 
-medRamboLightSpec = 10.*log10(median(ramboLightSpec,3,'omitnan'));
-medRamboSemiSpec  = 10.*log10(median(ramboSemiSpec,3,'omitnan'));
-medRamboDeepSpec  = 10.*log10(median(ramboDeepSpec,3,'omitnan')); 
+medRamboLightSpec = 20.*log10(median(ramboLightSpec,3,'omitnan'));
+medRamboSemiSpec  = 20.*log10(median(ramboSemiSpec,3,'omitnan'));
+medRamboDeepSpec  = 20.*log10(median(ramboDeepSpec,3,'omitnan')); 
 
 lightPowersR = median(medRamboLightSpec,1,'omitnan');
 semiPowersR  = median(medRamboSemiSpec,1,'omitnan');
@@ -344,17 +334,59 @@ deepPowersR  = median(medRamboDeepSpec,1,'omitnan');
 
 lightDeepR = lightPowersR-deepPowersR; 
 
+colorR = [1 2 3 1; 1 3 1 2];
+colorB = [1 3 1 2; 1 NaN NaN NaN; 1 2 1 NaN];
+
 animalB = reshape(animalB,[12 1]);
 animalR = reshape(animalR,[8 1]);
-isoR  = reshape(isoR,[8 1]);
-isoB  = reshape(isoB,[12 1]);
-nanVals = isnan(isoB);
-isoB(nanVals) = [];
-animalB(nanVals) = [];
-figure; scatter(isoB,animalB,'filled')
-figure; scatter(isoR,animalR,'filled')
 
-%% Load Ephys+imaging data and get EEG powers from 17-27 Hz
+colorB = reshape(colorB,[12 1]);
+colorR = reshape(colorR,[8 1]);
+
+isoR    = reshape(isoR,[8 1]);
+isoB    = reshape(isoB,[12 1]);
+nanVals = isnan(isoB);
+
+meanFreqB = reshape(meanFreqB,[12 1]);
+meanFreqR = reshape(meanFreqR,[8 1]); 
+
+freqIdx = freqValsSpec>=20 & freqValsSpec<=60;
+specBPow = reshape(20.*log10(squeeze(median(specB(:,freqIdx,:,:),[1 2],'omitnan'))),[12 1]);
+specRPow = reshape(20.*log10(squeeze(median(specR(:,freqIdx,:,:),[1 2],'omitnan'))),[8 1]);
+
+isoB(nanVals)         = [];
+animalB(nanVals)      = [];
+colorB(nanVals)       = [];
+specBPow(nanVals)     = [];
+meanFreqB(nanVals)    = [];
+
+figure; scatter(isoB,animalB,35,colorB,'filled');ylim([-20 70]);
+figure; scatter(isoR,animalR,35,colorR,'filled');ylim([-20 70]);
+figure; scatter(isoB,specBPow,35,colorB,'filled'); ylim([-20 70]);
+figure; scatter(isoR,specRPow,35,colorR,'filled');ylim([-20 70]);
+
+figure; scatter(isoB,meanFreqB,35,colorB,'filled'); %ylim([-20 70]);
+figure; scatter(isoR,meanFreqR,35,colorR,'filled');%ylim([-20 70]);
+
+%% Combining all three monkeys
+isoAllMonkeys   = [isoB ;isoR; animalStateIso'];
+colorAllMonkeys = [colorB; colorR; [1;2;3;1]];
+specPowAll      = [specBPow; specRPow; animalStateCheckW'];
+edgeFreqAll     = [meanFreqB; meanFreqR; meanFreqW']; 
+
+figure; scatter(isoAllMonkeys,specPowAll,60,colorAllMonkeys,'filled');
+ylim([-25 45]);ylabel('Power (dB)'); xlabel('Iso (%)');xlim([0.5 3.5]);
+
+figure; scatter(isoAllMonkeys,edgeFreqAll,60,colorAllMonkeys,'filled');
+ylim([0 20]);ylabel('Edge Frequency (Hz)'); xlabel('Iso (%)');xlim([0.5 3.5]);
+
+% K means clustering to see if the edge frequencies can be separable
+[idx,c] = kmeans(edgeFreqAll,3);
+figure; plot(isoAllMonkeys(idx==1),edgeFreqAll(idx==1),'r.','MarkerSize',25); hold on; 
+plot(isoAllMonkeys(idx==2),edgeFreqAll(idx==2),'m.','MarkerSize',25);
+plot(isoAllMonkeys(idx==3),edgeFreqAll(idx==3),'y.','MarkerSize',25);
+
+%% Load Ephys+imaging data and get EEG powers from 20-60 Hz
 hemisphere = 'Left'; spatialBin = 3;
 for iM = 1:2
     switch iM
@@ -418,11 +450,11 @@ for iM = 1:2
 
     % Calculating EEG powers
     % Get filter parameters...
-    clear fovCorr roiCorr gIntraProbeCorr gPowerCorr gInfraSlowCorr eegMaxPow
+    clear fovCorr roiCorr gIntraProbeCorr gPowerCorr gInfraSlowCorr eegMaxPow meanFreq
     fs = 1e3;
     gammaBand   = [30 90]; [bG,aG] = butter(3,gammaBand./(fs/2),'bandpass'); % Gamma band filtering parameters
     params.Fs       = fs;
-    params.fpass    = [1 120];
+    params.fpass    = [2 120];
     params.pad      = -1;
     params.tapers   = [3 5];
     params.trialave = 0;
@@ -431,6 +463,7 @@ for iM = 1:2
     gPowerCorr      = NaN(size(probe,2), size(probe,1));
     gInfraSlowCorr  = NaN(size(probe,2), size(probe,1));
     eegMaxPow       = NaN(size(probe,2), size(probe,1));
+    meanFreq        = NaN(size(probe,2), size(probe,1));
     
     clear fovCorr roiCorr
 
@@ -439,7 +472,7 @@ for iM = 1:2
 
 
     for iDate = 1:size(allDates,1)
-        clear expDate
+        clear expDate eegCh
         expDate = allDates(iDate,:);
 
         for iRun = 1:size(allRuns{iDate,1})
@@ -452,7 +485,7 @@ for iM = 1:2
 
             % Get run related variables
             probeCh     = probe{iRun,iDate}.probeCh;
-            eegCh       = probe{iRun,iDate}.eegCh;
+            eegChT       = probe{iRun,iDate}.eegCh;
             lfpBadTimes = badTimesLFP{iDate,iRun};
             badChDat    = badCh{iDate,iRun};
 
@@ -467,18 +500,57 @@ for iM = 1:2
             gIntraProbeCorr(iDate,iRun) = median(corr(gammaCh),'all','omitnan');
             gPowerCorr(iDate,iRun)      = median(corr(gPower),'all','omitnan');
             gInfraSlowCorr(iDate,iRun)  = median(corr(gInfraSlow),'all','omitnan');
+            
+            eegChT(lfpBadTimes,:)   = []; % Remove bad times from LFP
+          
+%             clear spec powMeansS badTimeThresh badTimeIndOld badTimeInd
+%             [spec,timeValsSpec,~] = mtspecgramc(eegChT,[5 2],params);
+% 
+%             powMeanS = squeeze(sum(spec,2));
+%             badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1));
+%             badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3;
+%             badTimes = [];
+%             
+%             if ~isempty(badTimeIndOld)
+%                 badTimes = [];
+%                 badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)']; % Taking one second before and one second after bad time segments
+% 
+%                 for iL = 1:size(badTimeInd,1)
+%                     badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
+%                 end
+%                 badTimes = unique(badTimes);
+%             end
+% 
+%              eegChT(badTimes,:) = [];
+             %eegCh(:,iRun) = eegChT(1:700e3,:); 
 
-            eegCh(lfpBadTimes,:)   = []; % Remove bad times from LFP
-%             eegCh = (eegCh-mean(eegCh))./std(eegCh); % Z-score
-%             [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegCh,[5 2],params);
+             paramsNew = params;%paramsNew.fpass = [2 120];
+             [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegChT,[2 1],paramsNew);
+             cumPowFreq = cumsum(spec,2);
+             mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+             [~,highPowerIdx] = max(mat,[],2);
+             meanFreq(iDate,iRun) = median(freqValsSpec(highPowerIdx));
+            
+             if iM==2
+                 specW{iDate,iRun} = spec;
+             end
+
+%         end
 % 
-%             % Get power for frequencies from 17-27 Hz
-%             idx = freqValsSpec>=17 & freqValsSpec<=27;
+%         % Normalize it within a day
+% %         clear eegChNorm
+% %         if size(eegCh,2)~=1
+% %             eegChNorm = (eegCh - median(eegCh,2,'omitnan'))./mad(eegCh,1,2);
+% %         else
+%             eegChNorm = eegCh;
+% %         end
 % 
-%             % Z-score the eeg relative to the first 100s of the recording
-%             specVals = spec(:,idx); %specVals = (specVals- median(specVals(1:50,:),1))./mad(specVals(1:50,:),1);
-            eegMaxPow(iDate,iRun) = real(10.*log10(median(eegCh(100:120,:),'all','omitnan'))); 
-        end
+%         for iRun = 1:size(allRuns{iDate},1)
+            clear spec timeValsSpec freqValsSpec
+            [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegChT,[5 2],params);          
+            freqIdx = freqValsSpec>=20 & freqValsSpec<=60;
+            eegMaxPow(iDate,iRun) = 20.*log10(squeeze(median(spec(:,freqIdx),[1 2],'omitnan')));
+        end 
     end
 
     eegMaxPow = reshape(eegMaxPow,[size(eegMaxPow,1)*size(eegMaxPow,2) 1]);
@@ -492,6 +564,9 @@ for iM = 1:2
 
     gInfraSlowCorr = reshape(gInfraSlowCorr,[size(gInfraSlowCorr,1)*size(gInfraSlowCorr,2) 1]);
     gInfraSlowCorr(isnan(gInfraSlowCorr)) = [];  gInfraSlowCorr(~goodRuns) = [];
+
+    meanFreq = reshape(meanFreq,[size(meanFreq,1)*size(meanFreq,2) 1]);
+    meanFreq(isnan(meanFreq)) = [];  meanFreq(~goodRuns) = [];
 
     % Plotting for individual monkeys
     figure; subplot(131); showLinearFit(isoLevelGoodRuns,gIntraProbeCorr,1.5,0.8,0.7); % Iso vs Ephys params
@@ -507,27 +582,28 @@ for iM = 1:2
     axis square;title('iso vs gamma infraslow power');xlim([0.6 1.8]);ylim([-1 1]);
 
     sgtitle(['iso % vs ephys parameters for ' monkeyName]);
-%%
-    figure; subplot(131); showLinearFit(eegMaxPow,gIntraProbeCorr,0.8,0.9,0.8); % EEG power vs Ephys params
-    xlabel('EEG metric'); ylabel('Correlations');
-    axis square; title('EEG power vs gamma time series');%xlim([-2 2]);ylim([-1 1]);
 
-    subplot(132); showLinearFit(eegMaxPow,gPowerCorr,0.8,0.9,0.8);
+    maxLim = round(max(eegMaxPow)); minLim = floor(min(eegMaxPow)); 
+    figure; subplot(131); showLinearFit(eegMaxPow,gIntraProbeCorr,maxLim-10,0.9,0.8); % EEG power vs Ephys params
     xlabel('EEG metric'); ylabel('Correlations');
-    axis square; title('EEG power vs gamma power');%xlim([-2 2]);ylim([-1 1]);
+    axis square; title('EEG power vs gamma time series');xlim([minLim-10 maxLim+10]);ylim([-1 1]);
+
+    subplot(132); showLinearFit(eegMaxPow,gPowerCorr,maxLim-10,0.9,0.8);
+    xlabel('EEG metric'); ylabel('Correlations');
+    axis square; title('EEG power vs gamma power');xlim([minLim-10 maxLim+10]);ylim([-1 1]);
     
-    subplot(133); showLinearFit(eegMaxPow,gInfraSlowCorr,0.8,0.9,0.8);
+    subplot(133); showLinearFit(eegMaxPow,gInfraSlowCorr,maxLim-10,0.9,0.8);
     axis square;xlabel('EEG metric'); ylabel('Correlations'); 
-    title('EEG power vs gamma infraslow power');%xlim([-2 2]);ylim([-1 1]);
+    title('EEG power vs gamma infraslow power');xlim([minLim-10 maxLim+10]);ylim([-1 1]);
     
     sgtitle(['EEG Power (au) vs ephys parameters for ' monkeyName]);
-%%
+
     figure; % EEG Power vs FOV
     for iBand = 1:5
         clear coeff xFit yFit mdl
         subplot(2,3,iBand);
-        showLinearFit(eegMaxPow,fovCorr(:,iBand),0.8,0.2,0.1);
-        xlabel('EEG metric'); ylabel('Correlations'); xlim([-2 2]);
+        showLinearFit(eegMaxPow,fovCorr(:,iBand),maxLim-10,0.2,0.1);
+        xlabel('EEG metric'); ylabel('Correlations'); xlim([minLim-10 maxLim+10]);
         title(bandLabels{iBand}); box off; ylim([-1 0.3]);
     end
      sgtitle(['FOV - ' monkeyName]);
@@ -536,8 +612,8 @@ for iM = 1:2
     for iBand = 1:5
         clear coeff xFit yFit mdl
         subplot(2,3,iBand);
-        showLinearFit(eegMaxPow,roiCorr(:,iBand),0.8,0,-0.1);
-        xlabel('EEG metric'); ylabel('Correlations'); xlim([-2 2]);
+        showLinearFit(eegMaxPow,roiCorr(:,iBand),maxLim-10,0,-0.1);
+        xlabel('EEG metric'); ylabel('Correlations'); xlim([minLim-10 maxLim+10]);
         title(bandLabels{iBand}); box off; ylim([-0.7 0.1]); 
     end
   sgtitle(['ROI - ' monkeyName]);
@@ -568,12 +644,14 @@ for iM = 1:2
         gInfraSlowCorrC = gInfraSlowCorr;
         gPowerCorrC      = gPowerCorr;
         isoC             = isoLevelGoodRuns;
+        meanFreqC        = meanFreq;
     else
         eegMaxAll          = [eegMaxPowC;eegMaxPow];
         gIntraProbeCorrAll = [gIntraProbeCorrC; gIntraProbeCorr];
         gInfraSlowCorrAll = [gInfraSlowCorrC; gInfraSlowCorr];
         gPowerCorrAll      = [gPowerCorrC; gPowerCorr];
         isoAll             = [isoC; isoLevelGoodRuns];
+        meanFreqAll        = [meanFreqC; meanFreq];
 
     end
 end
@@ -584,6 +662,138 @@ end
 figure; scatter(gIntraProbeCorrAll,gPowerCorrAll,'filled');
 figure; scatter(gIntraProbeCorrAll,gInfraSlowCorrAll,'filled');
 
+figure; scatter(isoAll, meanFreqAll,'filled');
+
+%% Plot all data from Whiskey, Charlie with Bordeaux and Rambo
+% isoAllMonkeys   = [isoB ;isoR; animalStateIso'];
+% colorAllMonkeys = [colorB; colorR; [1;2;3;1]];
+% specPowAll      = [specBPow; specRPow; animalStateCheckW'];
+% edgeFreqAll     = [meanFreqB; meanFreqR; meanFreqW']; 
+
+isoHigh = isoAll>=2; % to ensure that all data points are included
+iso = [isoAll(~isoHigh); isoAllMonkeys];
+mFreq = [meanFreqAll(~isoHigh); edgeFreqAll];
+eegPowAll = [eegMaxAll(~isoHigh); specPowAll];
+
+figure; scatter(iso,mFreq,70,[ones(size(meanFreqAll(~isoHigh))); colorAllMonkeys],'filled');
+ylabel('Edge Frequency (Hz)'); xlabel('Iso (%)'); ylim([0 25]); xlim([0.5 3.5]);
+
+modelfun = @(b,x) b(1) * exp(-b(2).*x);  
+beta0 = [10 2]; 
+mdl = fitnlm(iso,mFreq, modelfun, beta0);
+X = 0.5:0.1:3.5;
+coefficients = mdl.Coefficients{:, 'Estimate'};
+
+yFitted = coefficients(1) * exp(-coefficients(2).*X) ;
+hold on;
+plot(X, yFitted, 'r-', 'LineWidth', 2);
+text(2.5, 22,['R^2 : ' num2str(mdl.Rsquared.Ordinary*100) '%']);
+text(2.5, 20,['p-val: ' num2str(mdl.Coefficients.pValue(2))]);
+
+figure; scatter(iso,eegPowAll,60,[ones(size(meanFreqAll(~isoHigh))); colorAllMonkeys],'filled');
+xlabel('Iso (%)'); ylabel('EEG metric (dB)'); ylim([-20 50]); xlim([0.5 3.5]);
+
+%%
+figure; subplot(141);
+scatter(iso,mFreq,70,[ones(size(meanFreqAll(~isoHigh))); colorAllMonkeys],'filled');
+ylabel('Edge Frequency (Hz)'); xlabel('Iso (%)'); ylim([0 25]); xlim([0.5 3.5]);
+
+modelfun = @(b,x) b(1) * exp(-b(2).*x);  
+beta0 = [10 2]; 
+mdl = fitnlm(iso,mFreq, modelfun, beta0);
+X = 0.5:0.1:3.5;
+coefficients = mdl.Coefficients{:, 'Estimate'};
+
+yFitted = coefficients(1) * exp(-coefficients(2).*X) ;
+hold on;
+plot(X, yFitted, 'r-', 'LineWidth', 2);
+text(2.5, 22,['R^2 : ' num2str(mdl.Rsquared.Ordinary*100) '%']);
+text(2.5, 20,['p-val: ' num2str(mdl.Coefficients.pValue(2))]); axis square;
+xlim([0.5 3.5]); xticks(0.5:0.5:3.5); ylim([2 22]); yticks(2:2:22);
+
+fovCorr = [allMonkeyVars(1).peakNegValsAllT(:,:,2) ; allMonkeyVars(2).peakNegValsAllT(:,:,2)];     
+roiCorr = [allMonkeyVars(1).allChCorr ; allMonkeyVars(2).allChCorr];
+
+oneIdx = (gInfraSlowCorrAll== 1); 
+infraPow = gInfraSlowCorrAll; infraPow(oneIdx) =[]; 
+meanFreqAllNew = meanFreqAll; meanFreqAllNew(oneIdx) = [];
+isoAllNew = isoAll; isoAllNew(oneIdx) = [];
+eegPowNew  = eegMaxAll; eegPowNew(oneIdx) = [];
+
+subplot(142); 
+lowID = infraPow<0.1; 
+showLinearFit(meanFreqAllNew(~lowID),infraPow(~lowID),20,0.4,0.35);
+xlabel('Edge Frequency'); ylabel('Correlations');
+axis square;%title('Edge freq vs infraslow power correlations'); 
+xlim([5 22]); ylim([0.4 1]); xticks(0:2:22); yticks(0:0.1:1);
+
+subplot(143);
+showLinearFit(meanFreqAll, roiCorr(:,4),20,0,-0.1)
+xlabel('Edge Frequency'); ylabel('Correlations');
+axis square;%title('Edge freq vs ROI correlations - gamma');
+xlim([5 22]); ylim([-0.5 0]); xticks(0:2:22); yticks(-1:0.1:0);
+
+subplot(144); 
+showLinearFit(meanFreqAll,fovCorr(:,4),20,0,-0.1)
+xlabel('Edge Frequency'); ylabel('Correlations');
+axis square;%title('Edge freq vs FOV correlations - gamma'); 
+xlim([5 22]); ylim([-1 -0.2]); xticks(0:2:22); yticks(-1:0.1:0);
+
+%% EEG Metric
+
+figure; subplot(141);
+scatter(iso,eegPowAll,70,[ones(size(eegMaxAll(~isoHigh))); colorAllMonkeys],'filled');
+ylabel('EEG Metric'); xlabel('Iso (%)'); ylim([-20 40]); xlim([0.5 3.5]);
+
+modelfun = @(b,x) b(1) * exp(-b(2).*x);  
+beta0 = [10 2]; 
+mdl = fitnlm(iso,eegPowAll, modelfun, beta0);
+X = 0.5:0.1:3.5;
+coefficients = mdl.Coefficients{:, 'Estimate'};
+
+yFitted = coefficients(1) * exp(-coefficients(2).*X) ;
+hold on;
+plot(X, yFitted, 'r-', 'LineWidth', 2);
+text(2.5, 22,['R^2 : ' num2str(mdl.Rsquared.Ordinary*100) '%']);
+text(2.5, 20,['p-val: ' num2str(mdl.Coefficients.pValue(2))]); axis square;
+xlim([0.5 3.5]); xticks(0.5:0.5:3.5); ylim([-20 40]); yticks(-20:5:40);
+
+subplot(142);
+lowID = infraPow<0.1; 
+showLinearFit(eegPowNew(~lowID),infraPow(~lowID),35,0.4,0.35);
+xlabel('EEG Metric'); ylabel('Correlations');
+axis square; xlim([20 40]); xticks(-20:2:38); ylim([0.4 1]);
+
+subplot(143);
+showLinearFit(eegMaxAll, roiCorr(:,4),35,0,-0.1)
+xlabel('EEG Metric'); ylabel('Correlations');
+axis square; xlim([20 38]);xticks(-20:2:38);ylim([-0.6 0]);
+
+subplot(144); 
+showLinearFit(eegMaxAll,fovCorr(:,4),35,0,-0.1)
+xlabel('EEG Metric'); ylabel('Correlations');
+axis square; xlim([20 38]);xticks(-20:2:38);ylim([-1 -0.1]);
+
+
+% figure; % EEG Power vs FOV
+% for iBand = 4%1:5
+%     clear coeff xFit yFit mdl
+%      %subplot(2,3,iBand);
+%     showLinearFit(eegMaxAll,fovCorr(:,iBand),35,0,-0.1); xlim([20 38]);ylim([-1 0]) 
+%     xlabel('EEG metric'); ylabel('Correlations');  xlim([minLim-10 maxLim+10]);
+%     title(bandLabels{iBand}); box off; ylim([-1 0.3]);
+% end
+% sgtitle('FOV - Combined');
+% 
+% figure; % EEG Power vs ROI
+% for iBand = 4%1:5
+%     clear coeff xFit yFit mdl
+% %     subplot(2,3,iBand);
+%     showLinearFit(eegMaxAll,roiCorr(:,iBand),35,0,-0.1);xlim([20 38]);ylim([-0.6 0]) 
+%     xlabel('EEG metric'); ylabel('Correlations');  xlim([minLim-10 maxLim+10]);
+%     title(bandLabels{iBand}); box off; ylim([-0.7 0.1]); 
+% end
+% sgtitle('ROI - Combined');
 
 %% Plot
 fovCorr = [allMonkeyVars(1).peakNegValsAllT(:,:,2) ; allMonkeyVars(2).peakNegValsAllT(:,:,2)];     
@@ -603,67 +813,92 @@ axis square;title('iso vs gamma infraslow power');xlim([0.6 1.8]);ylim([-1 1]);
 
 sgtitle('iso % vs ephys parameters for all monkeys');
 
+
+
+%% 
+isoNew = isoAll; 
+highIso = isoNew== 1.75;
+isoNew(highIso) = [];
+eegNew = eegMaxAll; eegNew(highIso) = [];
+figure; showLinearFit(isoNew,eegNew,1.3,38,37);
+
+
 %%
-figure; subplot(131); showLinearFit(eegMaxAll,gIntraProbeCorrAll,300,0.9,0.8); % EEG power vs Ephys params
+maxLim = round(max(eegMaxAll)); minLim = floor(min(eegMaxAll)); 
+figure; subplot(131); showLinearFit(eegMaxAll,gIntraProbeCorrAll,maxLim-10,0.9,0.8); % EEG power vs Ephys params
 xlabel('EEG metric'); ylabel('Correlations');
-axis square; title('EEG power vs gamma time series'); xlim([0 500]);ylim([-1 1]);
+axis square; title('EEG power vs gamma time series'); xlim([minLim-10 maxLim+10]);ylim([-1 1]);
 
-subplot(132); showLinearFit(eegMaxAll,gPowerCorrAll,300,0.9,0.8);
+subplot(132); showLinearFit(eegMaxAll,gPowerCorrAll,maxLim-10,0.9,0.8);
 xlabel('EEG metric'); ylabel('Correlations');
-axis square; title('EEG power vs gamma power'); xlim([0 500]);ylim([-1 1]);
+axis square; title('EEG power vs gamma power'); xlim([minLim-10 maxLim+10]);ylim([-1 1]);
 
-subplot(133); showLinearFit(eegMaxAll,gInfraSlowCorrAll,300,0.9,0.8);
-axis square;xlabel('EEG metric'); ylabel('Correlations');
-title('EEG power vs gamma infraslow power'); xlim([0 500]);ylim([-1 1]);
+subplot(133); 
+%%
+oneIdx = (gInfraSlowCorrAll== 1); 
+infraPow = gInfraSlowCorrAll; infraPow(oneIdx) =[]; 
+eegMaxNew = eegMaxAll; eegMaxNew(oneIdx) = [];
+isoAllNew = isoAll; isoAllNew(oneIdx) = [];
 
-sgtitle('EEG Power (dB) vs ephys parameters for all monkeys');
+%%
+figure;
+showLinearFit(eegMaxNew,infraPow,40,0.9,0.8);
+xlabel('EEG metric'); ylabel('Correlations');
+title('EEG power vs gamma infraslow power'); xlim([minLim-10 maxLim+10]);ylim([-1 1]);
+%%
+highIsoNew = isoAllNew== 1.75;
+figure; showLinearFit(isoAllNew(~highIsoNew),infraPow(~highIsoNew),1.3,0.9,0.8);
 
+% sgtitle('EEG Power (dB) vs ephys parameters for all monkeys');
+%%
 figure; % EEG Power vs FOV
-for iBand = 1:5
+for iBand = 4%1:5
     clear coeff xFit yFit mdl
-    subplot(2,3,iBand);
-    showLinearFit(eegMaxAll,fovCorr(:,iBand),300,0.2,0.1);
-    xlabel('EEG metric'); ylabel('Correlations');  xlim([0 500]);
+     %subplot(2,3,iBand);
+    showLinearFit(eegMaxAll,fovCorr(:,iBand),35,0,-0.1); xlim([20 38]);ylim([-1 0]) 
+    xlabel('EEG metric'); ylabel('Correlations');  xlim([minLim-10 maxLim+10]);
     title(bandLabels{iBand}); box off; ylim([-1 0.3]);
 end
 sgtitle('FOV - Combined');
-
+%%
 figure; % EEG Power vs ROI
-for iBand = 1:5
+for iBand = 4%1:5
     clear coeff xFit yFit mdl
-    subplot(2,3,iBand);
-    showLinearFit(eegMaxAll,roiCorr(:,iBand),300,0,-0.1);
-    xlabel('EEG metric'); ylabel('Correlations');  xlim([0 500]);
+%     subplot(2,3,iBand);
+    showLinearFit(eegMaxAll,roiCorr(:,iBand),35,0,-0.1);xlim([20 38]);ylim([-0.6 0]) 
+    xlabel('EEG metric'); ylabel('Correlations');  xlim([minLim-10 maxLim+10]);
     title(bandLabels{iBand}); box off; ylim([-0.7 0.1]); 
 end
 sgtitle('ROI - Combined');
 
+%%
 figure; % Iso vs FOV
-for iBand = 1:5
+for iBand = 4%1:5
     clear coeff xFit yFit mdl
-    subplot(2,3,iBand);
-    showLinearFit(isoAll,fovCorr(:,iBand),1.5,0.2,0.1);
-    xlabel('Iso %'); ylabel('Correlations'); xlim([0.6 1.8]);
+%     subplot(2,3,iBand);
+    showLinearFit(isoAll(~highIso),fovCorr(~highIso,iBand),1.3,0,-0.1); %ylim([20 38]);xlim([0.6 1.8]);
+    xlabel('Iso %'); ylabel('Correlations'); 
     title(bandLabels{iBand}); box off; ylim([-1 0.3]);
 end
 sgtitle('FOV - Combined');
-
+%%
 figure; % Iso vs ROI
-for iBand = 1:5
+for iBand = 4%1:5
     clear coeff xFit yFit mdl
-    subplot(2,3,iBand);
-    showLinearFit(isoAll,roiCorr(:,iBand),1.5,0,-0.1);
+%     subplot(2,3,iBand);
+    showLinearFit(isoAll(~highIso),roiCorr(~highIso,iBand),1.3,0,-0.1);
     xlabel('Iso %'); ylabel('Correlations'); xlim([0.6 1.8]);
-    title(bandLabels{iBand}); box off; ylim([-0.7 0.1]); 
+    title(bandLabels{iBand}); box off; ylim([-0.6 0]); 
 end
 sgtitle('ROI - Combined');
-%
-figure; showLinearFit(isoAll,eegMaxAll,1.5,301,300);
-ylim([-2 2]);xlim([0 500]); xlabel('Iso %'); ylabel('EEG metric');
+
+%%
+figure; showLinearFit(isoAll,eegMaxAll,1.5,38,37);
+ylim([20 38]);xlim([0.6 1.8]); xlabel('Iso %'); ylabel('EEG metric');
 
 %%  Function to fit a line
 function showLinearFit(xVal,yVal,textLocX,textLocY1,textLocY2)
-    plot(xVal,yVal,'o','MarkerSize',5,'MarkerFaceColor',[0 0.4470 0.7410]); hold on; box off; 
+    plot(xVal,yVal,'o','MarkerSize',7,'MarkerFaceColor',[0 0.4470 0.7410]); hold on; box off; 
     coeff = polyfit(xVal,yVal,1);
     xFit = linspace(min(xVal),max(xVal),1000); 
     yFit = polyval(coeff,xFit); mdl = fitlm(xVal,yVal);
