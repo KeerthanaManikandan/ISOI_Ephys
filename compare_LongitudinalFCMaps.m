@@ -2,6 +2,7 @@
 % first procedure to the last. The purpose of this analysis is to compare
 % the quality of imaging data and recording stability over time. 
 % Edited on June 6, 2025 - KM
+% Codes for ISOI_Ephys Paper Supplementary Figure 6
 
 % Set paths
 clc; clear;
@@ -212,7 +213,7 @@ for iDate = 1:size(checkDates,1)
         seedLoc = round(bspline_trans_points_double(OTemp,spacingTemp,[seedLocNonLinear(iSeed,:)])); % Non-linear seed transformation
         try
             seedSig = calculateSeedSignal(imresize(greenIm{iDate,1},1/spatialBin), clipMaskCortex,fliplr(round(seedLoc./spatialBin)),12,pDatTemp); % Get Gaussian weighted seed signal
-            fcMap(:,:,iSeed) = plotCorrMap(seedSig,pDatTemp,0);
+            fcMap(:,:,iSeed) = plotCorrMap(seedSig,pDatTemp,0); % Obtain FC map
 
             tempFCMap = NaN(size(greenMapRef));
             tempFCMap(1:size(greenTemp,1),1:size(greenTemp,2)) = imresize(squeeze(fcMap(:,:,iSeed)),[1082 1312]);
