@@ -38,20 +38,11 @@ if ~(szLFP == szIm)
 end
 
 % Upsampling full FOV and removing bad frames...
-% timeStamp = timeStamp-timeStamp(1);
-% timeStamp = int32(floor(timeStamp.*1e3));
-% badTimes  = int32(badTimeThresh);
-% 
-% for iT = 1: length(badTimes)
-%     [~,badTimeIm2(iT)] = (min(abs(timeStamp - badTimes(iT))));
-% end
-% badTimeIm2 = unique(badTimeIm2);
-
 timeStampSorted = timeStamp- timeStamp(1);
 badTimes10Hz    = unique(badTimeThresh./1000);
 badTimeIm       = [];
 
-% Identifying frames to be removed from RS-ISOI
+% Identifying frames to be removed from rs-ISOI
 for iT = 1: length(badTimes10Hz)
     badTimeIm(iT) = find((floor(abs(timeStampSorted - badTimes10Hz(iT))*100)./100)<=0.05,1,'first'); %#ok<*AGROW> 
 end
@@ -66,18 +57,20 @@ rawCh(badTimes,:) = [];
 [probe,rawCh,processedDat10] = removeBadTimesFromSpec(monkeyName,expDate,runName,probe,rawCh,processedDat10);
 
 % Get infraslow power fluctuations for alpha and gamma LFP
-% Re-Reference physiology
+% Re-Reference physiology if needed
 if (strcmp(refType,'AvgRefTop5_Bottom5') || strcmp(refType,'AvgRef')) && (ch(2)-ch(1)~=0)
     probe = probe - mean(probe(:,ch(1):ch(2)),2);  % Average referencing
 
 elseif (strcmp(refType,'BipolarRef_Top5_Bottom5')|| strcmp(refType,'BipolarRef'))&& (ch(2)-ch(1)~=0)
     % Bipolar referencing
     chCount = ch(1);  probeTemp = []; rawTemp = [];
+
     while chCount<ch(2)
         probeTemp(:,chCount) = probe(:,chCount)- probe(:,chCount+1);
         rawTemp(:,chCount) = rawCh(:,chCount)- rawCh(:,chCount+1);
         chCount = chCount+1;
     end
+
     probe(:,ch(1):ch(2)-1) = probeTemp(:,ch(1):ch(2)-1);
     rawCh(:,ch(1):ch(2)-1) = rawTemp(:,ch(1):ch(2)-1);
     ch(2) = ch(2)-1; % Bipolar reference reduces the channel count by 1
@@ -116,7 +109,7 @@ infraEphysRaw   = getInfraSlowPowerLFP(rawCh,[],[],ch(1):ch(2)); % MUA
 
 infraMid      = []; infraMidAlpha = []; infraMidBeta  = []; infraMidTheta = []; infraMidRaw   = []; 
 
-if ch(2)-ch(1)== 0
+if ch(2)-ch(1)== 0 % Single channel
     infraSuper      = mean(infraEphys,2,'omitnan');
     infraDeep       = mean(infraEphys,2,'omitnan');
     infraAlphaSuper = mean(infraEphysAlpha,2,'omitnan');
@@ -128,20 +121,21 @@ if ch(2)-ch(1)== 0
     infraRawSuper   = mean(infraEphysRaw,2,'omitnan');
     infraRawDeep    = mean(infraEphysRaw,2,'omitnan');
 
-else
-    infraSuper      = mean(infraEphys(:,1:chSplit),2,'omitnan');
+else 
+    % Superficial compartment
+    infraSuper      = mean(infraEphys(:,1:chSplit),2,'omitnan'); % Gamma 
     infraDeep       = mean(infraEphys(:,(chSplit*2)+1:end),2,'omitnan');
 
-    infraAlphaSuper = mean(infraEphysAlpha(:,1:chSplit),2,'omitnan');
+    infraAlphaSuper = mean(infraEphysAlpha(:,1:chSplit),2,'omitnan'); % Alpha 
     infraAlphaDeep  = mean(infraEphysAlpha(:,(chSplit*2)+1:end),2,'omitnan');
 
-    infraBetaSuper  = mean(infraEphysBeta(:,1:chSplit),2,'omitnan');
+    infraBetaSuper  = mean(infraEphysBeta(:,1:chSplit),2,'omitnan'); % Beta
     infraBetaDeep   = mean(infraEphysBeta(:,(chSplit*2)+1:end),2,'omitnan');
 
-    infraThetaSuper = mean(infraEphysTheta(:,1:chSplit),2,'omitnan');
+    infraThetaSuper = mean(infraEphysTheta(:,1:chSplit),2,'omitnan');% Theta
     infraThetaDeep  = mean(infraEphysTheta(:,(chSplit*2)+1:end),2,'omitnan');
 
-    infraRawSuper   = mean(infraEphysRaw(:,1:chSplit),2,'omitnan');
+    infraRawSuper   = mean(infraEphysRaw(:,1:chSplit),2,'omitnan'); % Spiking 
     infraRawDeep    = mean(infraEphysRaw(:,(chSplit*2)+1:end),2,'omitnan');
     
     if chSplit~=10  && (ch(2)-ch(1)~= 0) % Get the middle channels if the split is separable
@@ -153,14 +147,14 @@ else
     end 
 end
 
-% Infra ephys powers for all channels 
+% Mean infraslow ephys powers for all channels 
 infraEphys      = mean(infraEphys,2,'omitnan');
 infraEphysAlpha = mean(infraEphysAlpha,2,'omitnan');
 infraEphysBeta  = mean(infraEphysBeta,2,'omitnan');
 infraEphysTheta = mean(infraEphysTheta,2,'omitnan');
 infraEphysRaw   = mean(infraEphysRaw,2,'omitnan') ;
 
-% Check size of timeseries of both modalities
+% Check the size of timeseries for both modalities
 szIm = size(processedDat10,2);
 szLFP = size(infraEphys,1);
 if ~(szLFP == szIm)
@@ -198,33 +192,36 @@ if ~(szLFP == szIm)
     end 
 end
 
-disp('Performing cross correlations...')
+% Correlate cross-modal maps to FC
+disp('Performing cross correlations...');
 
 tic;
 [~,lagFull]  = xcorr(infraEphys',processedDat10(1,:),200,'normalized');
 
 chLen = ch(2) - ch(1);
 parfor iP = 1:size(processedDat10,1)
-    
+        % All channels 
         [ccFull(:,iP),~]      = xcorr(infraEphys',processedDat10(iP,:),200,'normalized'); 
         [ccFullAlpha(:,iP),~] = xcorr(infraEphysAlpha',processedDat10(iP,:),200,'normalized');
         [ccFullBeta(:,iP),~]  = xcorr(infraEphysBeta',processedDat10(iP,:),200,'normalized');
         [ccFullTheta(:,iP),~] = xcorr(infraEphysTheta',processedDat10(iP,:),200,'normalized');
         [ccFullRaw(:,iP),~]   = xcorr(infraEphysRaw',processedDat10(iP,:),200,'normalized');
 
+        % Superficial
         [ccFullSuper(:,iP),~]      = xcorr(infraSuper',processedDat10(iP,:),200,'normalized');
         [ccFullAlphaSuper(:,iP),~] = xcorr(infraAlphaSuper',processedDat10(iP,:),200,'normalized');
         [ccFullBetaSuper(:,iP),~]  = xcorr(infraBetaSuper',processedDat10(iP,:),200,'normalized');
         [ccFullThetaSuper(:,iP),~] = xcorr(infraThetaSuper',processedDat10(iP,:),200,'normalized');
         [ccFullRawSuper(:,iP),~]   = xcorr(infraRawSuper',processedDat10(iP,:),200,'normalized');
 
+        % Deep
         [ccFullDeep(:,iP),~]      = xcorr(infraDeep',processedDat10(iP,:),200,'normalized');
         [ccFullAlphaDeep(:,iP),~] = xcorr(infraAlphaDeep',processedDat10(iP,:),200,'normalized');
         [ccFullBetaDeep(:,iP),~]  = xcorr(infraBetaDeep',processedDat10(iP,:),200,'normalized');
         [ccFullThetaDeep(:,iP),~] = xcorr(infraThetaDeep',processedDat10(iP,:),200,'normalized');
         [ccFullRawDeep(:,iP),~]   = xcorr(infraRawDeep',processedDat10(iP,:),200,'normalized'); 
 
-        if chSplit~=10 && (chLen~= 0)
+        if chSplit~=10 && (chLen~= 0) % Middle 
             [ccFullMid(:,iP),~]      = xcorr(infraMid',processedDat10(iP,:),200,'normalized');
             [ccFullAlphaMid(:,iP),~] = xcorr(infraMidAlpha',processedDat10(iP,:),200,'normalized');
             [ccFullBetaMid(:,iP),~]  = xcorr(infraMidBeta',processedDat10(iP,:),200,'normalized');
@@ -235,27 +232,29 @@ parfor iP = 1:size(processedDat10,1)
 end
 
 
-
 % Reshaping cross correlations 
+% All channels
 spatialProfile.ccFull      = reshape(ccFull,[401 imSize(1) imSize(2)]);  
 spatialProfile.ccFullAlpha = reshape(ccFullAlpha,[401 imSize(1) imSize(2)]);
 spatialProfile.ccFullBeta  = reshape(ccFullBeta,[401 imSize(1) imSize(2)]);
 spatialProfile.ccFullTheta = reshape(ccFullTheta,[401 imSize(1) imSize(2)]);
 spatialProfile.ccFullRaw   = reshape(ccFullRaw,[401 imSize(1) imSize(2)]);
 
+% Superficial
 spatialProfileSuper.ccFull      = reshape(ccFullSuper,[401 imSize(1) imSize(2)]);  
 spatialProfileSuper.ccFullAlpha = reshape(ccFullAlphaSuper,[401 imSize(1) imSize(2)]);
 spatialProfileSuper.ccFullBeta  = reshape(ccFullBetaSuper,[401 imSize(1) imSize(2)]);
 spatialProfileSuper.ccFullTheta = reshape(ccFullThetaSuper,[401 imSize(1) imSize(2)]);
 spatialProfileSuper.ccFullRaw   = reshape(ccFullRawSuper,[401 imSize(1) imSize(2)]);
 
+% Deep
 spatialProfileDeep.ccFull      = reshape(ccFullDeep,[401 imSize(1) imSize(2)]);  
 spatialProfileDeep.ccFullAlpha = reshape(ccFullAlphaDeep,[401 imSize(1) imSize(2)]);
 spatialProfileDeep.ccFullBeta  = reshape(ccFullBetaDeep,[401 imSize(1) imSize(2)]);
 spatialProfileDeep.ccFullTheta  = reshape(ccFullThetaDeep,[401 imSize(1) imSize(2)]);
 spatialProfileDeep.ccFullRaw   = reshape(ccFullRawDeep,[401 imSize(1) imSize(2)]);
 
-if chSplit~=10 && (ch(2)-ch(1)~= 0)
+if chSplit~=10 && (ch(2)-ch(1)~= 0) % Middle
     spatialProfileMid.ccFull      = reshape(ccFullMid,[401 imSize(1) imSize(2)]);
     spatialProfileMid.ccFullAlpha = reshape(ccFullAlphaMid,[401 imSize(1) imSize(2)]);
     spatialProfileMid.ccFullBeta  = reshape(ccFullBetaMid,[401 imSize(1) imSize(2)]);
@@ -264,6 +263,7 @@ if chSplit~=10 && (ch(2)-ch(1)~= 0)
 end 
 toc;
 
+% Save correlations
 disp('Saving cross correlations for the entire FOV...');
 if chSplit~=10 && (ch(2)-ch(1)~= 0)
     save([dataDir '\crossCorrFOV_' num2str(chSplit) '_' refType '.mat'],'spatialProfile','spatialProfileSuper',...

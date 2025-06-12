@@ -40,12 +40,12 @@ if ~exist([dataDir '\highestXCorrFrames_' bandName '.png'],'file')
     imagesc(squeeze(crossCorr(frameNumMed,:,:))); axis image off; hold on;
     h = imagesc(grayIm); hold off;
     set(h,'AlphaData',~clipMaskROI);
-    colormap jet; colorbar; caxis([-0.5 0.5]);
+    colormap jet; colorbar; clim([-0.5 0.5]);
     title(['Peak Positive median correlation at Lag: ' num2str(xNew(maxMedcorrInd)./10) 's ']);
 
     nexttile; imagesc(squeeze(crossCorr(frameNumMedLow,:,:))); axis image off; hold on;
     h = imagesc(grayIm); hold off; set(h,'AlphaData',~clipMaskROI);
-    colormap(flipud(jet)); colorbar; caxis([-0.5 0.5]);
+    colormap(flipud(jet)); colorbar; clim([-0.5 0.5]);
     title(['Peak Negative median correlation at Lag: ' num2str(xLow(maxMedcorrIndLow)./10) 's ']);
     colormap(ax1,'jet');
 

@@ -1,7 +1,7 @@
 function [allDates,allRuns, refDate, refDir,lensCombo, roiSize, ephysFileNameAll, serverPath, probeLabel,chInCortexNotes, greenMapRef] ...
     = getMonkeyParams_Imaging_Ephys(monkeyName, commonDir, hemisphere)
-% This function retrieves all the variables that are essential to analyze
-% imaging and physiology recorded simultaneously for one monkey 
+% This function initializes all the variables that are essential to analyze
+% imaging and physiology recorded simultaneously for one monkey.
 % April 03, 2024 - KM
 
 % Load all the runs, experiment dates, green reference images, reference directory for the corresponding monkey

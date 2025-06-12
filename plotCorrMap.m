@@ -9,7 +9,7 @@ cc = corr(seedMat,allMat','rows','complete');
 corrMap = reshape(cc,[imSize(1) imSize(2)]);
 if plotFlag
     figure; imagesc(corrMap); colormap jet; colorbar;
-    caxis([ 0 1]);
+    clim([ 0 1]);
 end
 end
 

@@ -6,6 +6,7 @@ function [processedDat,greenIm,probe,badCh,badTimesLFP,badTimeThresh,estChInCort
 % identifies bad time segments and channels and transition channels for
 % physiology.
 % April 03, 2024 - KM
+% Set parameters for spectrogram
 fs              = 1000;
 params.Fs       = fs;
 params.fpass    = [1 120];
@@ -96,7 +97,8 @@ for iDate = 1:size(allDates,1)
             clear pDatTemp
             pDatTemp = processedDat{iDate,iRun}.tempBandPass;
         end
-
+        
+        % Get FC map near the electrode 
         if ~exist([dataDir '\FCMap.png'],'file') % Near the electrode
             figure('units','normalized','outerposition',[0 0 1 1]);
             imagesc(greenIm{iDate,iRun}); colormap gray; axis image off;
@@ -115,13 +117,15 @@ for iDate = 1:size(allDates,1)
             figure('units','normalized','outerposition',[0 0 1 1]); imagesc(greenImRGB); hold on;
             corrMapR = imresize(corrMap,spatialBin,'OutputSize',[frameSize(1) frameSize(2)]);
             imagesc(corrMapR,'alphadata',corrMapR.*0.8);
-            colormap jet; colorbar; caxis([0 1]); axis image off;
+            colormap jet; colorbar; clim([0 1]); axis image off;
             plot(seedLoc(2),seedLoc(1),'w.','MarkerSize',35);
 
             sgtitle(strrep([monkeyName ' Date: ' expDate ' - Run: ' runName(end)],'_','\_'));
             f = gcf; exportgraphics(f,[dataDir '\FCMap.png'],'Resolution',300); close gcf;
         end
-
+        
+        % Check for quality of imaging by generating FC map from a random
+        % seed with known connectivity patterns.
         if ~exist([dataDir '\FCMapQC.png'],'file') % Imaging quality check
             figure('units','normalized','outerposition',[0 0 1 1]);
             imagesc(greenIm{iDate,iRun}); colormap gray; axis image off;
@@ -140,7 +144,7 @@ for iDate = 1:size(allDates,1)
             figure('units','normalized','outerposition',[0 0 1 1]); imagesc(greenImRGB); hold on;
             corrMapR = imresize(corrMap,spatialBin,'OutputSize',[frameSize(1) frameSize(2)]);
             imagesc(corrMapR,'alphadata',corrMapR.*0.8);
-            colormap jet; colorbar; caxis([0 1]); axis image off;
+            colormap jet; colorbar; clim([0 1]); axis image off;
             plot(seedLoc(2),seedLoc(1),'w.','MarkerSize',35);
 
             sgtitle(strrep([monkeyName ' Date: ' expDate ' - Run: ' runName(end)],'_','\_'));
@@ -148,21 +152,20 @@ for iDate = 1:size(allDates,1)
         end
         clear pDatTemp
 
-        % Get the functional connectivity map averaged across multiple
-        % resting state runs
+        % Get average FC map from multiple RS runs 
         if ~exist([dataDir '\AvgRS_FCMap.png'],'file')
             tic;
             figure('units','normalized','outerposition',[0 0 1 1]);
             imagesc(greenMapRef);axis image off; colormap gray; hold on;
             title(strrep(['Select the location where the probe is located for ' monkeyName ' ' expDate ' File: ' num2str(fileNum)],'_','\_'));
             refSeed(1,:,:) = ginput(1); close gcf;
-            [~,corrMapFinal] = getRSConnectivityMaps(squeeze(refSeed(1,:,:))',monkeyName);
+            [~,corrMapFinal] = getRSConnectivityMaps(squeeze(refSeed(1,:,:))',monkeyName); 
 
             figure('units','normalized','outerposition',[0 0 1 1]);
             imagesc(ind2rgb(greenMapRef,gray(256))); hold on;
             imagesc(corrMapFinal,'alphaData',corrMapFinal.*0.9); axis image off; hold on;
             plot(refSeed(1,:,1),refSeed(1,:,2),'w.','MarkerSize',35);
-            colormap jet; caxis([0 1]); f = gcf; toc;
+            colormap jet; clim([0 1]); f = gcf; toc;
             sgtitle(strrep([monkeyName ' Date: ' expDate ' - Run: ' runName(end)],'_','\_'));
             exportgraphics(f,[dataDir '\AvgRS_FCMap.png'],'Resolution',300); close gcf;
              
@@ -170,12 +173,13 @@ for iDate = 1:size(allDates,1)
     end
 end
 
-% Store/Retrieve physiology data...
+% Store/Retrieve electrophysiology data...
 for iDate = 1:size(allDates,1)
     clear expDate
     expDate    = allDates(iDate,:);
     for iRun = 1:size(allRuns{iDate,1},1)
         clear entityInfo datFileName timeStamp
+
         % Load all run information
         runName    = allRuns{iDate,1}(iRun,:);
         saveFolder = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\Electrophysiology\Processed Data'];
@@ -224,7 +228,7 @@ for iDate = 1:size(allDates,1)
             probe{iRun,iDate} = matfile([saveFolder '\' datFileName num2str(fileNum) '_lfp.mat']); clear probeCh eegCh timeStamp rawCh;        
      
         else
-            % Retrieve LFP Data
+            % Retrieve LFP and spiking data
             disp(['Retrieving electrophysiology data for ' monkeyName ' ' expDate ' File: ' num2str(fileNum)]);
             probe{iRun,iDate} = matfile([saveFolder '\' datFileName num2str(fileNum) '_lfp.mat']);
         end
@@ -306,9 +310,10 @@ for iDate = 1:size(allDates,1)
         
         % Determine the bad time segments
         badTimeInd = []; badTimes = [];
-
+        
+        % Remove 50 ms before and after each threshold crossing
         if ~isempty(badTimeIndOld)
-            badTimeInd = [(badTimeIndOld-fs/20)  (badTimeIndOld+fs/20)]; % Taking 50 ms before and after each threshold crossing
+            badTimeInd = [(badTimeIndOld-fs/20)  (badTimeIndOld+fs/20)]; 
 
             for iL = 1:size(badTimeInd,1)
                 badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
@@ -327,8 +332,8 @@ for iDate = 1:size(allDates,1)
             if length(channels)~= 1 % Linear array
                 [spec,timeValsSpec,freqValsSpec] = mtspecgramc(probeCh(:,15:end),[5 2],params);
                 figure; subplot(211);
-                imagesc(timeValsSpec,freqValsSpec, 10.*log10(squeeze(mean(spec,3)')));
-                caxis([-20 20]); set(gca,'YDir','normal'); colormap jet; colorbar;
+                imagesc(timeValsSpec,freqValsSpec, 10.*log10(squeeze(mean(spec,3)'))); % Before removal of bad time segments
+                clim([-20 20]); set(gca,'YDir','normal'); colormap jet; colorbar;
                 xlabel('Time (s)'); ylabel('Power (dB)'); title('Before removing bad time segments');
 
                 if ~isempty(badTimes)
@@ -337,20 +342,20 @@ for iDate = 1:size(allDates,1)
 
                     clear spec timeValsSpec freqValsSpec
                     [spec,timeValsSpec,freqValsSpec] = mtspecgramc(probeChTemp(:,15:end),[5 2],params);
-                    subplot(212); imagesc(timeValsSpec,freqValsSpec, 10.*log10(squeeze(mean(spec,3)')));
-                    caxis([-20 20]); set(gca,'YDir','normal');colormap jet; colorbar;
+                    subplot(212); imagesc(timeValsSpec,freqValsSpec, 10.*log10(squeeze(mean(spec,3)'))); % After removal of bad time segments
+                    clim([-20 20]); set(gca,'YDir','normal');colormap jet; colorbar;
                     xlabel('Time (s)'); ylabel('Power (dB)'); title('After removing bad time segments');
                 else
                     subplot(212); imagesc(timeValsSpec,freqValsSpec, 10.*log10(squeeze(mean(spec(:,:,15:end),3)')));
-                    caxis([-20 20]); set(gca,'YDir','normal'); title('No bad time segments detected');colormap jet; colorbar;
+                    clim([-20 20]); set(gca,'YDir','normal'); title('No bad time segments detected');colormap jet; colorbar;
                 end
 
             else % Single probe
                 probeChTemp = probeCh;
                 [spec,timeValsSpec,freqValsSpec] = mtspecgramc(probeChTemp,[5 2],params);
-                figure; subplot(211); imagesc(timeValsSpec,freqValsSpec, 10.*log10(spec'));
-                caxis([-20 20]); set(gca,'YDir','normal'); xlabel('Time (s)'); ylabel('Power (dB)'); colormap jet; colorbar;
-                if strcmp(expDate,'08_14_2023'); caxis([-60 60]); end
+                figure; subplot(211); imagesc(timeValsSpec,freqValsSpec, 10.*log10(spec'));% After removal of bad time segments
+                clim([-20 20]); set(gca,'YDir','normal'); xlabel('Time (s)'); ylabel('Power (dB)'); colormap jet; colorbar;
+                if strcmp(expDate,'08_14_2023'); clim([-60 60]); end
 
                 if ~isempty(badTimes)
                     probeChTemp(badTimes,:) = []; % Removing bad Time segments...
@@ -358,13 +363,13 @@ for iDate = 1:size(allDates,1)
                     clear spec timeValsSpec freqValsSpec
                     [spec,timeValsSpec,freqValsSpec] = mtspecgramc(probeChTemp,[5 2],params);
                     subplot(212);imagesc(timeValsSpec,freqValsSpec, 10.*log10(spec'));
-                    caxis([-20 20]); set(gca,'YDir','normal'); colormap jet;
+                    clim([-20 20]); set(gca,'YDir','normal'); colormap jet;
                     xlabel('Time (s)'); ylabel('Power (dB)'); title('After removing bad time segments'); colorbar;
-                    if strcmp(expDate,'08_14_2023'); caxis([-60 60]); end
+                    if strcmp(expDate,'08_14_2023'); clim([-60 60]); end
                 else
                     subplot(212); imagesc(timeValsSpec,freqValsSpec, 10.*log10(spec'));
-                    caxis([-20 20]); set(gca,'YDir','normal'); title('No bad time segments detected'); colormap jet; colorbar;
-                    if strcmp(expDate,'08_14_2023'); caxis([-60 60]); end
+                    clim([-20 20]); set(gca,'YDir','normal'); title('No bad time segments detected'); colormap jet; colorbar;
+                    if strcmp(expDate,'08_14_2023'); clim([-60 60]); end
                 end
             end
             sgtitle(strrep([monkeyName ' Date: ' expDate ' - Run: ' runName(end)],'_','\_'));
@@ -374,17 +379,19 @@ for iDate = 1:size(allDates,1)
         probeTemp = probeCh;
         probeTemp(badTimes,:) = [];
 
-        % Determine the transition channels for LFP data
+        % Determine the channels that are within cortex
         if size(probeTemp,2)~=1
 
-            % Get mean intra probe marginals from wideband range for Probe
+            % Get mean within probe marginals from wideband range for the
+            % electrode
             marginalVal = mean(imgaussfilt(corr(probeTemp,'Rows','complete'),1),2,'omitnan');
 
-            if ~exist(fullfile(dataDir,'pairCorr.png'),'file')
+            if ~exist(fullfile(dataDir,'pairCorr.png'),'file') % Within probe correlations 
                 tiledlayout(1,3,'TileSpacing','Compact');
                 nexttile([1 2]); imagesc(imgaussfilt(corr(probeTemp,'Rows','complete'),1));
                 colormap jet; colorbar; axis image tight;
                 xticks(1:2:size(probeTemp,2));  yticks(1:2:size(probeTemp,2));
+                
                 nexttile; plot(marginalVal,1:length(marginalVal));set(gca,'YDir','reverse');
                 axis padded;xlim([0 round((max(marginalVal)+0.1).*10)/10]);
                 xticks(0:0.2:round((max(marginalVal)+0.1).*10)/10);
@@ -393,7 +400,7 @@ for iDate = 1:size(allDates,1)
                 f = gcf; exportgraphics(f,[dataDir '\pairCorr.png'],'Resolution',300); close gcf;
             end
 
-            % Get the slope of the marginals for Probe A
+            % Get the slope of the marginals for the electrode 
             fx = abs(movmean(gradient(marginalVal),2,'omitnan'));
 
             % Find the channel with maximum slope
@@ -423,7 +430,7 @@ for iDate = 1:size(allDates,1)
             estChInCortex{iDate}(iRun,:) = [1 1];
         end
 
-        % Animal state: plot spectrogram of EEG
+        % Animal state: Plot spectrogram of the EEG
         clear eegGood spec timeValsSpec freqValsSpec
         if ~exist(fullfile(dataDir,'eegSpec.png'),'file')
             eegGood             = probe{iRun,iDate}.eegCh;
@@ -432,7 +439,7 @@ for iDate = 1:size(allDates,1)
             [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegGood,[5 2],params); % Spectrogram
 
             figure; imagesc(timeValsSpec,freqValsSpec, 10.*log10((spec)'));
-            caxis([-20 40]); set(gca,'YDir','normal');colormap jet; colorbar;
+            clim([-20 40]); set(gca,'YDir','normal');colormap jet; colorbar;
             xlabel('Time (s)'); ylabel('Frequency (Hz)');
             title(strrep([monkeyName ' Date: ' expDate ' Run: ' runName(end) ' - Spectrogram of EEG'],'_','\_'));
             f = gcf; exportgraphics(f,[dataDir '\eegSpec.png'],'Resolution',300); close gcf;

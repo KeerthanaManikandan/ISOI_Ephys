@@ -79,6 +79,7 @@ switch iM
             0.9 1 1 1 1 1 1; ...
             0.7 0.8 1 1.1 1.3 1.3 1.3]);
 end
+
 goodRuns = reshape(goodRuns,[size(goodRuns,1)*size(goodRuns,2) 1]);
 goodRuns(isnan(goodRuns)) = []; goodRuns = logical(goodRuns);
 
@@ -993,7 +994,7 @@ for iDate = 1:size(allDates,1)
                 corrMapT   = plotCorrMap(seedSigT,pDatTemp,0);
                 greenImRGB = ind2rgb(greenFig,gray(256));
                 figure; imagesc(greenImRGB);axis image; colormap jet; axis image off;
-                hold on; imagesc(corrMapT,'AlphaData',corrMapT.*0.8);caxis([0 1]);colorbar;
+                hold on; imagesc(corrMapT,'AlphaData',corrMapT.*0.8);clim([0 1]);colorbar;
                 f = gcf; exportgraphics(f,[dataDir '\FCMap_ROI.png'],'Resolution',300); close gcf;
             end
 
