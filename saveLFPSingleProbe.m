@@ -158,5 +158,4 @@ eegCh = filtfilt(bS,aS,eegCh); % Bandstop filtering between 57-62 Hz
 catch
     disp(['Data did not load for : ' runName]);
 end
-
 end

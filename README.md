@@ -13,9 +13,10 @@ This repository contains all codes necessary to process and store RS data collec
 ## Main functions
 1. **getMonkeyParams_Imaging_Ephys.m:** Initializes all necessary variables such as file name,experiment dates, lens combination, blood vessel maps, file locations for one monkey.
 2. **getAllData_Imaging_Ephys.m:** Stores/retrieves imaging and LFP data. This function also identifies bad time segments, channels, and transition channels into cortex.
-3. **getCrossCorrROI.m**: Performs cross-correlations between rs-ISOI and LFP, plots the temporal profile of cross-correlations, and also the ROI at peak negative correlations for all frequencies and layers.
-4. **getCrossCorrFOV.m:** Generates and saves the cross-modal maps for all frequencies and layers.
-5. **getInfraSlowPowerLFP.m:** Calculates infraslow powers from electrophysiological data. 
+3. **saveLFPSingleProbe.m:** Sub-function within `getAllData_Imaging_Ephys.m` to extract and store electrophysiological data
+4. **getCrossCorrROI.m**: Performs cross-correlations between rs-ISOI and LFP, plots the temporal profile of cross-correlations, and also the ROI at peak negative correlations for all frequencies and layers.
+5. **getCrossCorrFOV.m:** Generates and saves the cross-modal maps for all frequencies and layers.
+6. **getInfraSlowPowerLFP.m:** Calculates infraslow powers from electrophysiological data. 
 
 ## Dependent functions
 1. **getRSConnectivityMaps.m:**  Generates FC map averaged across multiple RS runs for a specific animal. 
