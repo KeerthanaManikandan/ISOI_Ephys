@@ -9,11 +9,10 @@ clc; clear;
 commonDir = 'C:\Users\kem294\Documents\Data';
 cd(commonDir);
 addpath(genpath(commonDir)); rmpath(genpath([commonDir '\Codes\nonlinear\functions']));clc;
-addpath(genpath([commonDir '\Codes\neuroshare']));
+addpath(genpath([commonDir '\Codes\ISOI_Ephys\neuroshare']));
 addpath(genpath([commonDir '\Codes\Ephys']));
-addpath(genpath([commonDir '\Codes\Imaging']));
-addpath(genpath([commonDir '\Codes\chronux_2_12']));
-rmpath(genpath([commonDir '\Codes\chronux_2_12\fly_track\videoIO']));
+addpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12']));
+rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\fly_track\videoIO']));
 
 %% Get monkey data
 monkeyName = 'Whiskey'; hemisphere = 'Left';

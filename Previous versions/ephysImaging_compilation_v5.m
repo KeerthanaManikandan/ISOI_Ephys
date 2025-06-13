@@ -7,7 +7,7 @@
 % October 7, 2024 - KM
 % Set paths
 clc; clear;
-commonDir = 'C:\Users\KEM294\Documents\Data';
+commonDir = 'C:\Users\kem294\Documents\Data';
 cd(commonDir);
 addpath(genpath(commonDir)); rmpath(genpath([commonDir '\Codes\nonlinear\functions']));clc;
 addpath(genpath([commonDir '\Codes\neuroshare']));
@@ -2796,7 +2796,7 @@ for iDate = 1:size(allDates,1)
             inDatSize infraEphys allCortexMask
 
         runName = allRuns{iDate,1}(iRun,:);
-        dataDir = ['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
+        dataDir = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
         serverDir = ['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\kem294\Data\' monkeyName '_SqM\' ...
             hemisphere ' Hemisphere\' expDate '\' runName];
         % IMAGING: Load the appropriate masks for the imaging data
@@ -3236,7 +3236,7 @@ patch(xVar,[posValAll(:,1)' fliplr(posValAll(:,2)')],[0.65 0.65 0.65],'FaceAlpha
 clear corrNegShuffleT
 
 corrNegShuffleT = reshape(corrNegShuffle,[size(corrNegShuffle,1)*size(corrNegShuffle,2) 9]);
-zeroInd =  find((corrNegShuffleT(:,1)) == 0); 
+zeroInd =  (corrNegShuffleT(:,1)) == 0; 
 corrNegShuffleT(zeroInd,:) = [];
 corrNegShuffleT(~goodRunsSpatial,:) = [];
 

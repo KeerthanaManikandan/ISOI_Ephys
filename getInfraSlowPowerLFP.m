@@ -23,6 +23,8 @@ fs      = 1e3;
 [z,p,k] = butter(3,[0.01 0.1]./(fs/2),'bandpass');
 [sos,g] = zp2sos(z,p,k);
 enSize  = size(envelopeDat); 
+
+% Pad the envelope and filter the signals
 envelopeFiltered = filtfilt(sos,g,double([envelopeDat; envelopeDat ;envelopeDat ]));
 envelopeFiltered = envelopeFiltered(enSize(1)+1:(end-enSize(1)),:);
 infraEphys       = single(downsample(envelopeFiltered,100));

@@ -3,24 +3,16 @@
 % with the average FC maps
 % February 28,2025 - KM
 % Set paths
-clear;clc
+clc; clear;
 commonDir = 'C:\Users\kem294\Documents\Data';
 cd(commonDir);
 addpath(genpath(commonDir)); rmpath(genpath([commonDir '\Codes\nonlinear\functions']));clc;
-addpath(genpath([commonDir '\Codes\neuroshare']));
+addpath(genpath([commonDir '\Codes\ISOI_Ephys\neuroshare']));
 addpath(genpath([commonDir '\Codes\Ephys']));
-addpath(genpath([commonDir '\Codes\Imaging']));
-addpath(genpath([commonDir '\Codes\chronux_2_12']));
-rmpath(genpath([commonDir '\Codes\chronux_2_12\fly_track\videoIO']));
-rmpath(genpath([commonDir '\Codes\chronux_2_12\spectral_analysis\continuous\dupes']));
-clc;
+addpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12']));
+rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\fly_track\videoIO']));
 
-%% Get cross-modal map for certain example runs
-
-% dateVals    = ['10_16_2023'; '10_16_2023'; '10_16_2023'; '12_04_2023'; '12_04_2023'; '04_29_2024' ; '04_29_2024'; '04_29_2024']; 
-% runNamesAll = ['run04'; 'run05'; 'run06'; 'run04'; 'run05'; 'run02' ; 'run04'; 'run08']; 
-% roiSize     = [38 38 38 38 38 38 38 38]; 
-% monkeyName  = 'Whiskey';
+%% Get cross-modal map for certain example runs (one accepted, one rejected)
 
 dateVals = ['10_16_2023'; '08_07_2023'];
 runNamesAll = ['run06';'run08'];
@@ -127,18 +119,21 @@ monkeyName = {'Whiskey', 'CharlieSheen'};
 % isoLevelSpatial = isoLevel; isoLevelSpatial(~goodRunsSpatial) = [];
 
 %% Get recording-wise and average FC maps
-
+% Initialize variables
 hemisphere = 'Left'; spatialBin = 3;
 
-for iSession = 2%:size(dateVals,1)
+for iSession = 1:size(dateVals,1)
     clear expDate serverDir runName crossCorrFOV
     expDate   = dateVals(iSession,:);
     runName   = runNamesAll(iSession,:);
+
     serverDir = ['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\kem294\Data\' ...
         monkeyName{iSession} '_SqM\' hemisphere ' Hemisphere\'  expDate '\' runName];
+
     dataDir = ['D:\Data\' monkeyName{iSession} '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName];
     
-    if strcmp(monkeyName{iSession},'Whiskey')
+    % Get location of master blood vessel maps 
+    if strcmp(monkeyName{iSession},'Whiskey') 
         refDate      = '05_09_2022';
         refDir       = [commonDir '\' monkeyName{iSession} '_SqM\' hemisphere ' Hemisphere\' refDate '\Master Green Images\'];
         refImageName = 'Combined Green';
@@ -169,86 +164,10 @@ for iSession = 2%:size(dateVals,1)
     end
 
     greenTemp = greenTemp(:,:,1);
-
-    if exist([dataDir '\clipMask0' runName(end) '.BMP'],'file') == 0
-        clipMask = imread([dataDir '\clipMask0' runName(end) '.png']);
-    else
-        clipMask = imread([dataDir '\clipMask0' runName(end) '.bmp']);
-    end
-
-    % This mask includes vessels and electrode(s)
-    if exist([dataDir '\maskSkull0' runName(end) '.bmp'],'file') == 0
-        elecMask = imread([dataDir '\maskSkull0' runName(end) '.png']);
-    else
-        elecMask = imread([dataDir '\maskSkull0' runName(end) '.bmp']);
-    end
-
-    clipMask       = imresize(clipMask,1/3); % Resize mask
-    clipMask       = clipMask(:,:,1)>0; % Converting to 0s and 1s
-    elecMask       = imresize(elecMask-100,1/3); % Binarize image
-    elecMask       = elecMask(:,:,1)>0;
-    clipMaskCortex = clipMask & ~elecMask; % Mask of cortex sans vessels
-    imSize         = size(clipMask);
-
-    % Mask for comparing the imaging and hybrid map (after removing
-    % areas beyond lateral sulcus)
-    if exist([dataDir '\corrMask0' runName(end) '.BMP'],'file')
-        corrMask = imread([dataDir '\corrMask0' runName(end) '.bmp']);
-        corrMaskFlag = 1;
-    elseif exist([dataDir '\corrMask0' runName(end) '.PNG'],'file')
-        corrMask = imread([dataDir '\corrMask0' runName(end) '.png']);
-        corrMaskFlag = 1;
-    else
-        corrMaskFlag = 0;
-    end
-
-    % Mask for comparing the imaging and hybrid map (after removing
-    % areas beyond lateral sulcus)...
-    if exist([dataDir '\corrMask0' runName(end) '.BMP'],'file')
-        corrMask = imread([dataDir '\corrMask0' runName(end) '.bmp']);
-        corrMaskFlag = 1;
-    elseif exist([dataDir '\corrMask0' runName(end) '.PNG'],'file')
-        corrMask = imread([dataDir '\corrMask0' runName(end) '.png']);
-        corrMaskFlag = 1;
-    else
-        corrMaskFlag = 0;
-    end
-
-    if corrMaskFlag
-        corrMask = imresize(corrMask,1/3); % Resize the mask
-        corrMask = corrMask(:,:,1)>0;
-        corrMask = corrMask & ~elecMask;
-    else
-        corrMask = clipMaskCortex;
-    end
-
-    corrMaskT = reshape(corrMask,[imSize(1)*imSize(2) 1]);
-
-%     % Get cross-modal maps
-%     crossCorrFOV = matfile([serverDir '\crossCorrFOV_6_NoRef.mat']);
-%     allXCorr     = crossCorrFOV.spatialProfile;
-%     allLags      = crossCorrFOV.lagFull;
-% 
-%     allHybridVars = matfile([dataDir '\processedHybridMapVars.mat']);
-%     corrFCHybrid  = allHybridVars.corrFCHybridT; 
-% 
-%     peakNegValsAll  = allHybridVars.peakNegValsAllT;  peakNegValsAll  = peakNegValsAll(:,2);
-%     peakNegTimesAll = allHybridVars.peakNegTimesAllT; peakNegTimesAll = peakNegTimesAll(:,2);
-%     x = -200:200;
-% 
-%     for iX = 1:size(peakNegTimesAll,1)
-%         peakNegIdx(iX,1) = find(x== peakNegTimesAll(iX).*10);
-%     end
-% 
-%     crossCorrAlpha = reshape(allXCorr.ccFullAlpha,[401 imSize(1)*imSize(2)]); crossCorrAlpha(:,~corrMaskT)   = NaN;
-%     crossCorrBeta  = reshape(allXCorr.ccFullBeta,[401 imSize(1)*imSize(2)]);  crossCorrBeta(:,~corrMaskT)    = NaN;
-%     crossCorrGamma = reshape(allXCorr.ccFull,[401 imSize(1)*imSize(2)]);      crossCorrGamma(:,~corrMaskT)   = NaN;
-%     crossCorrSpiking = reshape(allXCorr.ccFullRaw,[401 imSize(1)*imSize(2)]); crossCorrSpiking(:,~corrMaskT) = NaN;
-%     
-%     alphaCrossModal   = squeeze(crossCorrAlpha(peakNegIdx(2),:));
-%     betaCrossModal    = squeeze(crossCorrBeta(peakNegIdx(3),:));
-%     gammaCrossModal   = squeeze(crossCorrGamma(peakNegIdx(4),:));
-%     spikingCrossModal = squeeze(crossCorrGamma(peakNegIdx(5),:));
+    
+    % Get masks
+    [clipMaskCortex, corrMask] = getMasks(dataDir,runName);
+    corrMaskT                  = reshape(corrMask,[imSize(1)*imSize(2) 1]);
 
     % Get ROI location and session-wise FC map
     processedDat = matfile([dataDir '\processedFrames.mat']);
@@ -262,13 +181,10 @@ for iSession = 2%:size(dateVals,1)
     seedSigT = calculateSeedSignal(greenFig,corrMask,...
         seedLocIn,circleRad,pDatTemp); % Get Gaussian weighted seed signal
 
-    fcMap             = plotCorrMap(seedSigT,pDatTemp,0);
-
-%     [optimizer,metric] = imregconfig('multimodal');
-%     tformRunWise = imregtform(imresize(greenIm{iDate,iRun},1/spatialBin),imresize(greenIm{iDate,1},1/spatialBin),'affine',optimizer,metric);
+    fcMap = plotCorrMap(seedSigT,pDatTemp,0); % Get FC map
 
     % Register the green and the mask to the master green
-    if ~exist([dataDir '\imRegisMaster.mat'],'file')
+    if ~exist([dataDir '\imRegisMaster.mat'],'file') % Check if image registration has been done already
         clear movPointsTemp fixedPointsTemp OTemp spacingTemp corrMapFinal
         
         % Get FC map averaged over multiple RS runs
@@ -276,14 +192,8 @@ for iSession = 2%:size(dateVals,1)
         imagesc(greenMapRef);axis image off; colormap gray; hold on;
         title(strrep(['Select the location where the probe is located for ' monkeyName{iSession} ' ' expDate ' ' runName],'_','\_'));
         refSeed(1,:,:) = ginput(1); close gcf;
-        [~,corrMapFinal] = getRSConnectivityMaps(squeeze(refSeed(1,:,:))',monkeyName{iSession});
+        [~,corrMapFinal] = getRSConnectivityMaps(squeeze(refSeed(1,:,:))',monkeyName{iSession}); % Get average FC map
 
-        figure('units','normalized','outerposition',[0 0 1 1]);
-        imagesc(ind2rgb(greenMapRef,gray(256))); hold on;
-        imagesc(corrMapFinal,'alphaData',corrMapFinal.*0.9); axis image off; hold on;
-        plot(refSeed(1,:,1),refSeed(1,:,2),'w.','MarkerSize',35);
-        colormap jet; clim([0 1]);
-        
         % Nonlinear registration to master green
         [movPointsTemp,fixedPointsTemp] = cpselect(greenTemp,greenMapRef,'Wait',true);
         [OTemp,spacingTemp,~] = point_registration(size(greenMapRef),fliplr(fixedPointsTemp),fliplr(movPointsTemp));
@@ -295,7 +205,8 @@ for iSession = 2%:size(dateVals,1)
         spacingTemp = regisPoints.spacingTemp; 
         corrMapFinal = regisPoints.corrMapFinal;
     end
-
+    
+    % Get masks 
     greenSize = size(greenMapRef);
     tempMask  = zeros(size(greenMapRef));
     tempMask(1:size(greenTemp,1),1:size(greenTemp,2)) = imresize(corrMask,[1082 1312]);
@@ -303,16 +214,18 @@ for iSession = 2%:size(dateVals,1)
     tempFCMap = zeros(size(greenMapRef));
     tempFCMap(1:size(greenTemp,1),1:size(greenTemp,2)) = imresize(fcMap,[1082 1312]);
     
-    % Need to recheck how I do the correlations...
+    % Warp the recording-wise map to the average
     [imMaskTemp,tMaskTemp]   = bspline_transform(OTemp,tempMask,spacingTemp,3); % bicubic spline interpolation
     [imFCMapTemp,tFCMapTemp] = bspline_transform(OTemp,tempFCMap,spacingTemp,3);
 
-    imMaskTempR = logical(reshape(imMaskTemp,[greenSize(1)*greenSize(2) 1]));
+    imMaskTempR  = logical(reshape(imMaskTemp,[greenSize(1)*greenSize(2) 1]));
     imFCMapTempR = reshape(imFCMapTemp,[greenSize(1)*greenSize(2) 1]);
     imFCMapTempR(~imMaskTempR) = NaN;
-    corrMapFinalR = reshape(corrMapFinal,[greenSize(1)*greenSize(2) 1]);
-    corrMapFinalR(~imMaskTempR) = NaN;
 
+    corrMapFinalR = reshape(corrMapFinal,[greenSize(1)*greenSize(2) 1]);
+    corrMapFinalR(~imMaskTempR) = NaN; % Using the same masks to include the common pixels for correlationg 
+
+    % Correlate recording-wise map to the average 
     corrFC_Avg_SessionWise(iSession) = corr(imFCMapTempR,corrMapFinalR,'rows','complete');
 
 end
@@ -330,9 +243,3 @@ fcMapWarped = reshape(imFCMapTempR,[greenSize(1) greenSize(2)]);
 subplot(122);imagesc(ind2rgb(greenMapRef,gray(256))); hold on;
 imagesc(fcMapWarped,'AlphaData',fcMapWarped.*1); colormap jet; clim([0 1]);
 axis image off; colorbar;title('Recording-wise FC map');
-
-
-
-
-
-

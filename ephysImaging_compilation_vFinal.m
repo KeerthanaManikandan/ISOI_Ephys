@@ -13,11 +13,10 @@ clc; clear;
 commonDir = 'C:\Users\kem294\Documents\Data';
 cd(commonDir);
 addpath(genpath(commonDir)); rmpath(genpath([commonDir '\Codes\nonlinear\functions']));clc;
-addpath(genpath([commonDir '\Codes\neuroshare']));
+addpath(genpath([commonDir '\Codes\ISOI_Ephys\neuroshare']));
 addpath(genpath([commonDir '\Codes\Ephys']));
-addpath(genpath([commonDir '\Codes\Imaging']));
-addpath(genpath([commonDir '\Codes\chronux_2_12']));
-rmpath(genpath([commonDir '\Codes\chronux_2_12\fly_track\videoIO']));
+addpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12']));
+rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\fly_track\videoIO']));
 
 %% Initialize variables and get monkey data
 hemisphere = 'Left'; spatialBin = 3;
@@ -961,7 +960,7 @@ deepHybridAllBandsT(~(goodRunsSpatial & ~singleChFlag),:,:,:)   = [];
 clear varInfo;
 varFlag = 0;
 try matfile(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\ISOI_Ephys_allVars.mat']);
-    varInfo = who('-file',['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\ISOI_Ephys_allVars.mat']);
+    varInfo = who('-file',['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\ISOI_Ephys_allVars.mat']);
     if sum(ismember(varInfo,'corrFCHybridT'))==0 || sum(ismember(varInfo,'superHybridAllBandsT'))==0
         varFlag = 1;
     end
@@ -974,217 +973,5 @@ if varFlag % Save variables
        'corrFCHybridT','corrFCSuperT','corrFCMidT','corrFCDeepT','peakNegValsAllT',...
        'super_DeepAvgFramesT','super_MidAvgFramesT','deep_MidAvgFramesT',...
        'superHybridAllBandsT','midHybridAllBandsT','deepHybridAllBandsT','-append');
-end
-
-%% Control analyses
-
-%%%%%%%%%%%%%%%%%%%%%%%%%% Spatial controls %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Correlate FC maps obtained from seeds placed at varying distances from 
-% the eectrode with the cross-modal map with maximum correspondence to FC
-% Initialize variables
-x = -200:200;
-negIdx = (-100<=x)&(x<=0); negVals = x(negIdx);
-
-% Perform spatial controls for each recording
-for iDate = 1:size(allDates,1)
-    clear expDate;
-    expDate = allDates(iDate,:);
-
-    for iRun = 1: size(allRuns{iDate,1},1)
-        clear runName dataDir clipMask elecMask clipMaskCortex corrMask lowIdx ...
-            pDatTemp greenFig seedLocIn crossCorrTemp allHybridMaps mapsAll...
-            peakNegHybridMap mapsAllTemp probeCh badTimes szLFP skullMask ...
-            inDatSize infraEphys allCortexMask
-
-        runName = allRuns{iDate,1}(iRun,:);
-        dataDir = ['X:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
-        serverDir = ['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\kem294\Data\' monkeyName '_SqM\' ...
-            hemisphere ' Hemisphere\' expDate '\' runName];
-       
-        % IMAGING: Load the appropriate masks for the imaging data
-        [clipMaskCortex, corrMask] = getMasks(dataDir,runName);
-
-        % Get rs-ISOI data for the run
-        pDatTemp = processedDat{iDate,iRun}.tempBandPass;
-        imSize   = size(pDatTemp);
-        greenFig = imresize(greenIm{iDate,iRun},1/spatialBin,'OutputSize',[imSize(1) imSize(2)]);
-        
-        % Get ROI location and FC map
-        seedLocIn    = load([dataDir '\roiCenterLoc.mat']);
-        seedLocProbe = seedLocIn.seedLocProbe;
-        seedLocIn    = seedLocIn.seedLocIn;
-        circleRad    = 6;
-
-        seedSigT     = calculateSeedSignal(greenFig,corrMask,...
-            seedLocIn,circleRad,pDatTemp); % Get Gaussian weighted seed signal
-
-        fcMap            = plotCorrMap(seedSigT,pDatTemp,0); % Get FC map
-        corrMaskT        = reshape(corrMask,[imSize(1)*imSize(2) 1]);
-        fcMap            = reshape(fcMap,[361*438 1]);
-        fcMap(~corrMaskT) = NaN;
-
-        % Get the cross-modal maps and determine lag  for the run
-        try
-            allHybridMaps  = matfile([serverDir '\crossCorrFOV_6_NoRef.mat']);
-        
-        catch % Get maps if they aren't saved already
-            getCrossCorrFOV(monkeyName,expDate,runName,serverDir,processedDat{iDate,iRun}.tempBandPass,...
-                probe{iRun,iDate}.probeCh,probe{iRun,iDate}.rawCh,badTimesLFP{iDate,iRun},badTimeThresh{iDate,iRun},...
-                badCh{iDate,iRun},estChInCortex{1,iDate}(iRun,:),probe{iRun,iDate}.timeStamp);
-
-            allHybridMaps = matfile([serverDir '\crossCorrFOV_6_NoRef.mat']);
-        end
-
-        mapsAllTemp           = allHybridMaps.spatialProfile; % Get cross-modal maps
-        mapsAll               = mapsAllTemp.ccFull;
-        mapsAll               = reshape(mapsAll,[401 361*438]);
-        mapsAll(:,~corrMaskT) = NaN;
-
-        disp('Obtaining spatial controls...');
-        pDatTemp = reshape(pDatTemp,[imSize(1) imSize(2) imSize(3)]);
-       
-        tic;
-        if ~exist([dataDir '\spatialControlVarsFOV.mat'],'file') 
-            clear  lagLow  hybridLowMap runWiseSpatialCorr runWiseSpatialTimes locAll corrHybridMap
-            % Get 40 seeds at 0.5, 1, 2, 3,4 mm away from the electrode each
-   
-            minShift  = round(roiSize{iDate}(iRun)/spatialBin);
-            theta     = linspace(0,2*pi, round(pi*minShift)); % number of angles
-            maxPoints = length(theta);
-            distShift = {'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'};
-
-            for iShift = 1:5 
-                clear loc locShift row col numPoints pixelLoc
-                if iShift == 1
-                    locShift = round(roiSize{iDate}(iRun)/spatialBin); % Get the distance from the electrode (radius)
-                else
-                    locShift = round(roiSize{iDate}(iRun)*2*(iShift-1)/spatialBin);
-                end
-
-                % Get coordinates for a circle
-                loc(:,1) = round(locShift * cos(theta) + seedLocProbe(1));
-                loc(:,2) = round(locShift * sin(theta) + seedLocProbe(2));
-
-                % Get the FC map for the locations and correlate with hybrid map
-                for iPoint = 1:size(loc,1)
-                    clear seedSigT corrMapT mapVals seedRad seed 
-                    seedRad =  round(roiSize{iDate}(iRun)/(spatialBin)); % seed radius for FC map- 500um
-                    
-                    % Check if any of the seed locations are on a vessel or
-                    % suli or out of the image. 
-                    if any((fliplr(loc(iPoint,:))+seedRad)>size(greenFig)) || any(loc(iPoint,:)-seedRad<= 0)
-                        runWiseSpatialCorr(iShift,iPoint)  = NaN;
-                        runWiseSpatialTimes(iShift,iPoint) = NaN;
-                        loc(iPoint,:) = NaN;
-                    
-                    else % Get FC maps
-                        seed = loc(iPoint,:);
-                        clipMask_seed = ~corrMask(seed(2)-seedRad:seed(2)+seedRad,seed(1)-seedRad:seed(1)+seedRad);
-                        allCortex_seed = ~allCortexMask(seed(2)-seedRad:seed(2)+seedRad,seed(1)-seedRad:seed(1)+seedRad);
-                        maskSize = size(clipMask_seed,1) *size(clipMask_seed,2);
-
-                        % Check if the masks occupy more than 50% of seed
-                        % or if the seeds are close to the edge (the edges
-                        % of the image should at max occupy 25% of seed)
-                        if ((sum(clipMask_seed,'all')/maskSize)>0.5) || ((sum(allCortex_seed,'all')/maskSize)>0.25)
-                            runWiseSpatialCorr(iShift,iPoint)  = NaN;
-                            runWiseSpatialTimes(iShift,iPoint) = NaN;
-                            loc(iPoint,:) = NaN;
-                            continue;
-                        else
-                            % Get Gaussian weighted seed signal
-                            seedSigT = calculateSeedSignal(greenFig,clipMaskCortex,loc(iPoint,:),seedRad,pDatTemp);
-                            corrMapT = reshape(plotCorrMap(seedSigT,pDatTemp,0),[imSize(1)*imSize(2) 1]);
-
-                            % Correlate FC map with all hybrid maps. This
-                            % correlation makes sure that we remain agnostic
-                            % about the peak negative lag and this gives a
-                            % distribution of lags and/or correlations. The
-                            % variables that change are lags, distance between
-                            % probe and seed locations.
-                            for iMap = 1:401; mapVals(iMap) = corr(corrMapT,mapsAll(iMap,:)','rows','complete'); end
-
-                            [runWiseSpatialCorr(iShift,iPoint),runWiseSpatialTimes(iShift,iPoint)] = min(mapVals(negIdx));
-                            runWiseSpatialTimes(iShift,iPoint) = negVals(runWiseSpatialTimes(iShift,iPoint))./10;
-
-                            % Correlate FC map with peak cross-modal map -
-                            % the lag is fixed here, the distance between the
-                            % probe and the seed is the variable that is
-                            % changing here.
-                            corrHybridMap(iShift,iPoint) = corr(corrMapT,peakNegHybridMap','rows','complete');
-                        end
-                    end
-                    locAll{iShift} = loc;
-                end
-            end
-            % Save the location and the correlation between cross-modal and
-            % FC maps
-            save([dataDir '\spatialControlVarsFOV.mat'],'runWiseSpatialCorr','runWiseSpatialTimes','locAll','corrHybridMap');
-            spCorrControl{iRun,iDate}      = runWiseSpatialCorr;
-            spCorrControlTimes{iRun,iDate} = runWiseSpatialTimes;
-            spCorrHybridMap{iRun,iDate}    = corrHybridMap;
-
-            toc;
-        else % Load all correlations 
-            clear allSpatialVars
-            allSpatialVars = load([dataDir '\spatialControlVarsFOV.mat']);
-            spCorrControl{iRun,iDate}      = allSpatialVars.runWiseSpatialCorr;
-            spCorrControlTimes{iRun,iDate} = allSpatialVars.runWiseSpatialTimes;
-            spCorrHybridMap{iRun,iDate}    = allSpatialVars.corrHybridMap;
-            locAll                         = allSpatialVars.locAll;
-        end
-        
-        % Show the seeds, peak correlations
-        if ~exist([dataDir '\spatialControlFOV_v2.png'],'file')
-            cVals = {'w','k','b','g','m'};
-
-            % Show the seeds on the blood vessel map
-            figure('units','normalized','outerposition',[0 0 1 1]);
-            subplot(131); imagesc(greenFig); hold on; colormap gray; axis image off;
-            plot(seedLocProbe(1),seedLocProbe(2),'Marker','pentagram','MarkerSize',15,...
-                'MarkerFaceColor','r','MarkerEdgeColor','none');
-
-            for iShift = 1:5 % Show the seeds
-                if ~isempty(locAll{iShift})
-                    plot(locAll{iShift}(:,1),locAll{iShift}(:,2),'.','Color',cVals{iShift},'MarkerSize',10);
-                end
-            end
-            
-            % Show the peak correlations vs distance
-            subplot(132);boxplot(spCorrControl{iRun,iDate}',{'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
-            xlabel('Distance from probe (mm)'); ylabel('Correlation between FC map and peak negative map');
-            ylim([-1 0.3]);
-            
-            % Show the lag values where peak correlations were observed
-            subplot(133);boxplot(spCorrControlTimes{iRun,iDate}',{'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
-            xlabel('Distance from probe (mm)'); ylabel('Lag at peak negative correlation'); ylim([-11 3]);
-
-            sgtitle(strrep(['FC maps vs Hybrid maps (varying lag) for ' monkeyName ' ' expDate ' ' runName],'_','\_'));
-            f = gcf; exportgraphics(f,[dataDir '\spatialControlFOV_v3.png'],'Resolution',300); close gcf;
-        end
-        
-        % Plot the seeds on the blood vessel map and show the correlations
-        % between peak cross-modal and FC map
-        if ~exist([dataDir '\spatialControl_HybridMap_v2.png'],'file')
-            cVals = {'w','k','b','g','m'};
-
-            figure('units','normalized','outerposition',[0 0 1 1]);
-            subplot(121); imagesc(greenFig); hold on; colormap gray; axis image off;
-            plot(seedLocProbe(1),seedLocProbe(2),'Marker','pentagram','MarkerSize',15,...
-                'MarkerFaceColor','r','MarkerEdgeColor','none');
-
-            for iShift = 1:5
-                if ~isempty(locAll{iShift})
-                    plot(locAll{iShift}(:,1),locAll{iShift}(:,2),'.','Color',cVals{iShift},'MarkerSize',10);
-                end
-            end
-
-            subplot(122);boxplot(spCorrHybridMap{iRun,iDate}',{'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
-            xlabel('Distance from probe (mm)'); ylabel('Correlation between FC map and peak negative map');
-            sgtitle(strrep(['FC maps vs Hybrid map (fixed lag) for ' monkeyName ' ' expDate ' ' runName],'_','\_')); ylim([-1 0.3]);
-
-            f = gcf; exportgraphics(f,[dataDir '\spatialControl_HybridMap_v2.png'],'Resolution',300); close gcf;
-        end
-    end
 end
 

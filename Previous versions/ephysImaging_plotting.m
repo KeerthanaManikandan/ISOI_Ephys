@@ -730,7 +730,7 @@ for iDate = 1:size(allDates,1)
         end
     end
 end
-save(['X:\Data\' monkeyName '_SqM\Left Hemisphere\fcTest_RefCorr.mat'],'fc_TestCorr');
+save(['D:\Data\' monkeyName '_SqM\Left Hemisphere\fcTest_RefCorr.mat'],'fc_TestCorr');
 
 % Grouping the data from the controls
 fc_TestCorr = load(['X:\Data\' monkeyName '_SqM\Left Hemisphere\fcTest_RefCorr.mat']);
