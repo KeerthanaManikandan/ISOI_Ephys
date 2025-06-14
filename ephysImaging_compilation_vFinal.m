@@ -408,6 +408,10 @@ for iDate = 1:size(allDates,1)
         dataDir   = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName];
         serverDir = ['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\kem294\Data\' ...
             monkeyName '_SqM\' hemisphere ' Hemisphere\'  expDate '\' runName ];
+        
+        if ~exist(serverDir,'dir') 
+            [~,~] = mkdir(serverDir); 
+        end 
 
         clc; disp(['Analyzing data for ' monkeyName ' '  expDate ' run: ' runName]);
         
