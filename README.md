@@ -7,8 +7,7 @@ This repository contains all codes necessary to process and store RS data collec
 3. `ephysImaging_plottingFinal.m`: Plots all compiled data for spatial, temporal, laminar analysis and other figures.
 4. `animalStateAnalysis.m`: Script to calculate edge frequencies and powers from EEG spectrogram. 
 5. `crossModal_FC_correlations.m`:Script to correlate recording-wise FC map to average FC maps for two example runs (check supplementary figure 1) 
-6. `compare_LongitudinalFCMaps.m`:
-
+6. `compare_LongitudinalFCMaps.m`:Script to compare session-wise FC maps to average to assess the quality of the imaging over time. 
 
 ## Main functions
 1. `getMonkeyParams_Imaging_Ephys.m`: Initializes all necessary variables such as file name,experiment dates, lens combination, blood vessel maps, file locations for one monkey.
@@ -20,7 +19,7 @@ This repository contains all codes necessary to process and store RS data collec
 
 ## Dependent functions
 1. `getRSConnectivityMaps.m`:  Generates FC map averaged across multiple RS runs for a specific animal. 
-2. `getMonkeyParamsRS.m`: Initializes variables such as experiment date, runs, reference, folder locations. 
+2. `getMonkeyParamsRS.m`: Initializes variables such as experiment date, runs, reference, folder locations.
 3. `getPreProcessedDataRestingState.m`: Processes and stores rs-ISOI data from experiments involving rs-ISOI only. 
 4. `getMasks.m`:Loads the masks for a specific run.
 5. `calculateSeedSignal.m:** Calculates the mean seed signal to generate FC map.
@@ -32,7 +31,7 @@ This repository contains all codes necessary to process and store RS data collec
 - 01_Sunin: To process imaging data.
 - neuroshare: To process neural data recorded from Ripple
 - nonlinear: To perform image registration.
-- chronux_2_12: To calculate spectrogram 
+- chronux_2_12: To calculate power spectral density, spectrograms. 
 
 ### Abbreviations
 - rs-ISOI: Resting state intrinsic signal optical imaging

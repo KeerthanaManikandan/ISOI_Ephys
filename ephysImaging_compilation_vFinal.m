@@ -14,13 +14,12 @@ commonDir = 'C:\Users\kem294\Documents\Data';
 cd(commonDir);
 addpath(genpath(commonDir)); rmpath(genpath([commonDir '\Codes\nonlinear\functions']));clc;
 addpath(genpath([commonDir '\Codes\ISOI_Ephys\neuroshare']));
-addpath(genpath([commonDir '\Codes\Ephys']));
 addpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12']));
 rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\fly_track\videoIO']));
 
 %% Initialize variables and get monkey data
 hemisphere = 'Left'; spatialBin = 3;
-iM = 2; % 1 - Charlie Sheen, 2 - Whiskey
+iM = 1; % 1 - Charlie Sheen, 2 - Whiskey
 
 % Get good runs, channel info, location of electorde in a date x run format
 switch iM
