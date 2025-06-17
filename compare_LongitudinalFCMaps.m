@@ -180,7 +180,7 @@ for iDate = 1:size(checkDates,1)
     runName    = runNames00(iDate,:);
     fileNum    = 0;
 
-    % Get the directory and filenames
+    %Get the directory and filenames
     dataDir  = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
     templateDir = ['D:\Data\' monkeyName '_SqM\Left Hemisphere\'];
     cDriveFlag  = 0;
@@ -221,7 +221,7 @@ for iDate = 1:size(checkDates,1)
         processedDat{iDate,1} = matfile([dataDir '\processedFrames.mat']); clear tempBandPass;
 
     else % Retrieve processed data        
-        disp(['Loading imaging data for ' monkeyName ' ' expDate ' File: ' num2str(fileNum)]);
+        disp(['Loading imaging data for ' monkeyName ' ' expDate ' File: ' num2str(runName(end))]);
         processedDat{iDate,1} = matfile([dataDir '\processedFrames.mat']);
     end
 
@@ -237,9 +237,9 @@ for iDate = 1:size(checkDates,1)
 
     % Check if registration has been performed already
     if exist([dataDir '\imRegisMaster.mat'],'file') || exist(['C:\Users\kem294\Documents\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate  '\imageRegisPoints_RS.mat'],'file')
-        if ~cDriveFlag
+        try
             regisPoints = load([dataDir '\imRegisMaster.mat'],'movPointsTemp','fixedPointsTemp','OTemp','spacingTemp');
-        else
+        catch
             regisPoints = load(['C:\Users\kem294\Documents\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate  '\imageRegisPoints_RS.mat'],...
                 'movPointsTemp','fixedPointsTemp','OTemp','spacingTemp');
         end
@@ -306,24 +306,75 @@ colormap gray;axis image off;
 numSeeds = size(corrFC_Avg_SessionWise,1);
 
 figure; % Show the distribution
-x1 = (reshape(repmat(1:5,[numSeeds 1]),[numSeeds*5 1]));
-y1 = reshape(corrFC_Avg_SessionWise,[numSeeds*5 1]);
+x1 = (reshape(repmat(1:4,[numSeeds 1]),[numSeeds*4 1]));
+y1 = reshape(corrFC_Avg_SessionWise(:,10:end),[numSeeds*4 1]);
 s = swarmchart(x1,y1,20,[0 0.4470 0.7410]); 
 s.XJitterWidth = 0.5; hold on;
 
 % Show the boxplot
-boxplot(corrFC_Avg_SessionWise,'Labels',{0, 4, 16, 20, 23});
+boxplot(corrFC_Avg_SessionWise(:,10:end),'Labels',{4, 16, 20, 23});
 xlabel('Months'); ylabel('Correlations between session and average FC');
 box off;ylim([0 1]); 
 
 % ANOVA to compare the distributions
-[pSpCorrT,tblSpCorrT,statsSpCorrT] = anova1(corrFC_Avg_SessionWise,{'0', '4', '16', '20', '23'},'off');
-[rSpCorrT,mSpCorrT,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.001);
+[pSpCorrT,tblSpCorrT,statsSpCorrT] = anova1(corrFC_Avg_SessionWise(:,10:end),{'4', '16', '20', '23'},'off');
+[rSpCorrT,mSpCorrT,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.01);
 
 tblSpCorrMT = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
     "Difference","Upper limit","p-val"]);
 tblSpCorrMT.("Group") = gnamesSpCorrT(tblSpCorrMT.("Group"));
 tblSpCorrMT.("Control Group") = gnamesSpCorrT(tblSpCorrMT.("Control Group"));
+
+%% Plot correlations within baseline sesions
+withinBsl = corrFC_Avg_SessionWise(:,1:9);
+
+for iType = 1:2
+    clear withinBslGroup
+    switch iType
+        case 1
+            withinBslGroup = reshape(corrFC_Avg_SessionWise(:,1:9),[51*3 3]);
+            type = 'Pooling';
+        case 2
+            withinBslGroup = [mean(corrFC_Avg_SessionWise(:,1:3),2,'omitnan') ...
+                mean(corrFC_Avg_SessionWise(:,4:6),2,'omitnan') ...
+                mean(corrFC_Avg_SessionWise(:,7:9),2,'omitnan')];
+            type = 'Averaging';
+    end 
+
+    numSeeds = size(withinBslGroup,1);
+
+    figure; % Show the distribution
+    x1 = (reshape(repmat(1:3,[numSeeds 1]),[numSeeds*3 1]));
+    y1 = reshape(withinBslGroup,[numSeeds*3 1]);
+    s = swarmchart(x1,y1,20,[0 0.4470 0.7410]);
+    s.XJitterWidth = 0.5; hold on;
+
+    % Show the boxplot
+    boxplot(withinBslGroup,'Labels',{4, 16, 20});
+    xlabel('Months'); ylabel('Correlations between session and average FC');
+    box off;ylim([0 1]); title(type);
+
+     % ANOVA to compare the distributions
+     clear statsSpCorrT gNamesSpCorrT rSpCorrT
+     [pSpCorrT(iType),~,statsSpCorrT] = anova1(withinBslGroup,{'0', '1', '2'},'off');
+     [rSpCorrT,~,~,gnamesSpCorrT]     = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.001,'Display','off');
+    
+     if iType == 1
+         tblSpCorrType1 = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
+             "Difference","Upper limit","p-val"]);
+         tblSpCorrType1.("Group")         = gnamesSpCorrT(tblSpCorrType1.("Group"));
+         tblSpCorrType1.("Control Group") = gnamesSpCorrT(tblSpCorrType1.("Control Group"));
+     
+     else
+         tblSpCorrType2 = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
+             "Difference","Upper limit","p-val"]);
+         tblSpCorrType2.("Group")         = gnamesSpCorrT(tblSpCorrType2.("Group"));
+         tblSpCorrType2.("Control Group") = gnamesSpCorrT(tblSpCorrType2.("Control Group"));
+
+     end
+
+end
+
 
 %% Get greens and masks
 function [greenTemp,elecMask,clipMaskCortex,corrMask]= getGreensAndMasks(serverPath,dataDir,templateDir,expDate,runName,runNames00)
@@ -340,11 +391,11 @@ if isempty(find(strcmp({fileInfo.name},['green' runName(end-1:end) '.png']), 1))
 end
 
 % Check if greens are edited and load greens
-if exist([templateDir  expDate '\' runNames00(end,:) '\green0' runNames00(end,5) '_Edited.png'],'file')
-    greenTemp = imread([dataDir '\green0' runNames00(end,5) '_Edited.png']);
+if exist([templateDir  expDate '\' runName '\green0' runName(5) '_Edited.png'],'file')
+    greenTemp = imread([dataDir '\green0' runName(5) '_Edited.png']);
 
-elseif exist([templateDir  expDate '\' runNames00(end,:) '\green0' runNames00(end,5) '_Edited.bmp'],'file')
-    greenTemp = imread([dataDir '\green0' runNames00(end,5) '_Edited.bmp']);
+elseif exist([templateDir  expDate '\' runName '\green0' runName(5) '_Edited.bmp'],'file')
+    greenTemp = imread([dataDir '\green0' runName(5) '_Edited.bmp']);
 
 else
     error('Greens are not edited...');
