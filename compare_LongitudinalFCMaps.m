@@ -325,9 +325,7 @@ tblSpCorrMT = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Low
 tblSpCorrMT.("Group") = gnamesSpCorrT(tblSpCorrMT.("Group"));
 tblSpCorrMT.("Control Group") = gnamesSpCorrT(tblSpCorrMT.("Control Group"));
 
-%% Plot correlations within baseline sesions
-withinBsl = corrFC_Avg_SessionWise(:,1:9);
-
+%% Plot correlations of within baseline sesions to average 
 for iType = 1:2
     clear withinBslGroup
     switch iType
@@ -372,8 +370,39 @@ for iType = 1:2
          tblSpCorrType2.("Control Group") = gnamesSpCorrT(tblSpCorrType2.("Control Group"));
 
      end
-
 end
+
+%% Plot the within session correlations alongside simultaneous recording correlations
+% Show the distributions of baseline correlations and also medians in two
+% separate plots
+for iType = 1:2
+    switch iType
+        case 1
+            withinBsl = reshape(corrFC_Avg_SessionWise(:,1:9),[51*3 3]);
+            typeName  = 'Pooling correlations';
+        case 2
+            withinBsl = median(reshape(corrFC_Avg_SessionWise(:,1:9),[51*3 3]),1,'omitnan');
+            typeName  = 'Averaging correlations';
+
+    end
+    plotVector = {withinBsl, corrFC_Avg_SessionWise(:,10:end)};
+    maxNum     = max(cellfun(@(x) size(x,1),plotVector));
+    plotVector = cell2mat(cellfun(@(x){padarray(x,[maxNum-size(x,1),0],NaN,'post')}, plotVector));
+
+    figure; boxplot(plotVector,'Labels',{0, 1, 2, 4, 16, 20, 23});
+    xlabel('Months'); ylabel('Correlations between session and average FC');
+    box off;ylim([0 1]); title(typeName); hold on; 
+
+    % Show individual points - comment this section if you don't want to
+    % plot all correlation values in the boxplot
+    numSeeds = size(plotVector);
+    x1 = (reshape(repmat(1:numSeeds(2),[numSeeds(1) 1]),[numSeeds(1)*numSeeds(2) 1]));
+    y1 = reshape(plotVector,[numSeeds(1)*numSeeds(2) 1]);
+    s = swarmchart(x1,y1,20,[0 0.4470 0.7410],'filled');
+    s.XJitterWidth = 0.5; hold on;
+end
+
+
 
 
 %% Get greens and masks
