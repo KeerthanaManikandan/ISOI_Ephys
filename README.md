@@ -2,9 +2,9 @@
 This repository contains all codes necessary to process and store RS data collected from ISOI and linear electrode array simultaneously.
 
 ## Main scripts
-1. `ephysImaging_compilation_vFinal.m`: Master script that performs temporal, spatial, laminar analysis
-2. `controlAnalysis.m`: Script that performs spatial and control analyses.
-3. `ephysImaging_plottingFinal.m`: Plots all compiled data for spatial, temporal, laminar analysis and other figures.
+1. `ephysImaging_compilation_vFinal.m`: Master script that performs temporal, spatial, laminar analysis for one animal.
+2. `controlAnalysis.m`: Script that performs spatial and temporal control analyses.
+3. `ephysImaging_plottingFinal.m`: Plots all compiled data for spatial, temporal, laminar analysis and other figures for both animals.
 4. `animalStateAnalysis.m`: Script to calculate edge frequencies and powers from EEG spectrogram. 
 5. `crossModal_FC_correlations.m`:Script to correlate recording-wise FC map to average FC maps for two example runs (check supplementary figure 1) 
 6. `compare_LongitudinalFCMaps.m`:Script to compare session-wise FC maps to average to assess the quality of the imaging over time. 

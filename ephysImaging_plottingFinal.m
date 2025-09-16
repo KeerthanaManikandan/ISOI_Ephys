@@ -78,6 +78,31 @@ clear roiCorr
     title(monkeyName);
 end
 
+%% Show distribution of temporal correlations separated by cortical area
+clear allROICorr
+
+allROICorr   = [allMonkeyVars(1).allChCorr ; allMonkeyVars(2).allChCorr];
+smFlagT      = [allMonkeyVars(1).smFlagROI; allMonkeyVars(2).smFlagROI];
+ssROICorr    = allROICorr(smFlagT == 'S',:);
+motorROICorr = allROICorr(smFlagT == 'M',:);
+
+% Bar plot version 1
+figure; bar(-[median(ssROICorr,1,'omitnan')' median(motorROICorr,1)']);
+box off; xticklabels(bandLabels); legend('Somatosensory','Motor');
+ylabel('Temporal correlations'); ylim([0 0.4]);
+
+% Boxplot version 1
+figure; subplot(121); boxplot(-ssROICorr,bandLabels);  ylim([-0.15 0.6]); ylabel('Temporal correlations'); box off; title('Somatosensory');
+subplot(122); boxplot(-motorROICorr,bandLabels); ylim([-0.15 0.6]); ylabel('Temporal correlations'); box off; title('Motor');
+
+% Boxplot version 2
+ssROICorr(15:21,:) = NaN;
+fullMat = reshape([ssROICorr; motorROICorr],size(ssROICorr,1),[]); 
+figure; boxplot(-fullMat); box off;  ylim([-0.15 0.6]); ylabel('Temporal correlations'); 
+% xticks(1:5); xticklabels(bandLabels);
+
+
+
 %% Show temporal correlation distributions for ROI for each compartment 
 for iM = 1:3
 clear super mid deep
@@ -132,6 +157,8 @@ clear super mid deep
     end
 end
 
+
+
 %% Spatial correlations
 % Show the median cross-correlation vs lag for FOV 
 clear fovProfile
@@ -182,6 +209,30 @@ clear fovCorr
     boxplot(fovCorr,bandLabels); ylim([-1 1]); box off;    
     title(monkeyName);
 end
+
+%% Show distribution of spatial correlations separated by cortical area
+clear allFOVCorr
+iType = 2;
+allFOVCorr   = [allMonkeyVars(1).peakNegValsAllT(:,:,iType) ; allMonkeyVars(2).peakNegValsAllT(:,:,iType)];
+smFlagT      = [allMonkeyVars(1).smFlagROI; allMonkeyVars(2).smFlagROI];
+ssFOVCorr    = allFOVCorr(smFlagT == 'S',:);
+motorFOVCorr = allFOVCorr(smFlagT == 'M',:);
+
+% Bar plot version
+figure; bar(-[median(ssFOVCorr,1)' median(motorFOVCorr,1)']);
+box off; xticklabels(bandLabels); legend('Somatosensory','Motor');
+ylabel('Spatial correlations'); ylim([0 0.8]);
+
+% Boxplot version
+figure; subplot(121); boxplot(-ssFOVCorr,bandLabels); ylim([-0.3 1]); ylabel('Spatial correlations'); box off; title('Somatosensory');
+subplot(122); boxplot(-motorFOVCorr,bandLabels); ylim([-0.3 1]); ylabel('Spatial correlations'); box off; title('Motor');
+
+% Boxplot version 2
+ssFOVCorr(15:21,:) = NaN;
+fullMat = reshape([ssFOVCorr; motorFOVCorr],size(ssFOVCorr,1),[]); 
+figure; boxplot(-fullMat); box off;  ylim([-0.3 1]); ylabel('Spatial correlations'); 
+% xticks(1:5); xticklabels(bandLabels);
+
 
 %% Show spatial correlation distributions for each compartment
 % Boxplots of frequencies for each layer
@@ -532,7 +583,7 @@ for iT = 1: length(timelineNew)
     end
 end
 
-timeLineRep = reshape(repmat(timelineNew,[7 1]),[98 1]);
+timeLineRep = log10(reshape(repmat(timelineNew,[7 1]),[98 1]));
 
 % Show the temporal and spatial correlations over time
 % Spatial correlations

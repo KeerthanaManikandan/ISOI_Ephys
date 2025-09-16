@@ -527,9 +527,9 @@ for iDate = 1:size(allDates,1)
                         crossCorrFOV = matfile([serverDir '\crossCorrFOV_6_AvgRef.mat']);
                         fileName     = '6_AvgRef';
 
-                    case 5 % CSD re-referencing, 6/6/6 split between compartments
-                        crossCorrFOV = matfile([serverDir '\crossCorrFOV_6_CSDRef.mat']);
-                        fileName     = '6_CSDRef';
+                    % case 5 % CSD re-referencing, 6/6/6 split between compartments
+                    %     crossCorrFOV = matfile([serverDir '\crossCorrFOV_6_CSDRef.mat']);
+                    %     fileName     = '6_CSDRef';
                 end
                 
                 % Load the correlations
@@ -544,7 +544,7 @@ for iDate = 1:size(allDates,1)
 
                 x = allLags; % Get lag information
                 negIdx = x<0 & x>=-150; negVals = x(negIdx);
-                lowIdx = x<0 & x>= -80; xLow = x(lowIdx);
+                lowIdx = x<0 & x>= -70; xLow = x(lowIdx);
 
                 % Cross-modal maps for different frequencies
 
@@ -932,6 +932,10 @@ peakNegValsAllT = reshape(peakNegValsAll,[size(peakNegValsAll,1)*size(peakNegVal
 peakNegValsAllT(nanRow,:,:) = [];
 peakNegValsAllT(~goodRunsSpatial,:,:) = [];
 
+peakNegTimesAllT = reshape(peakNegTimesAll,[size(peakNegValsAll,1)*size(peakNegValsAll,2) size(peakNegValsAll,3) size(peakNegValsAll,4)]);
+peakNegTimesAllT(nanRow,:,:) = [];
+peakNegTimesAllT(~goodRunsSpatial,:,:) = [];
+
 % Correlations between compartments ie; S/D, S/M and M/D 
 super_DeepAvgFramesT = reshape(super_DeepAvgFrames,[size(super_DeepCorr,1)*size(super_DeepCorr,2) size(super_DeepCorr,3) size(super_DeepCorr,4)]);
 super_DeepAvgFramesT(nanRow,:,:)           = [];
@@ -974,7 +978,7 @@ end
 if varFlag % Save variables
     save(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\ISOI_Ephys_allVars.mat'],...
        'corrFCHybridT','corrFCSuperT','corrFCMidT','corrFCDeepT','peakNegValsAllT',...
-       'super_DeepAvgFramesT','super_MidAvgFramesT','deep_MidAvgFramesT',...
+       'peakNegTimesAllT','super_DeepAvgFramesT','super_MidAvgFramesT','deep_MidAvgFramesT',...
        'superHybridAllBandsT','midHybridAllBandsT','deepHybridAllBandsT','-append');
 end
 
