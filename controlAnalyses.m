@@ -307,6 +307,7 @@ if ~exist(['D:\Data\' monkeyName '_SqM\Left Hemisphere\fcTest_RefCorr.mat'],'fil
     save(['D:\Data\' monkeyName '_SqM\Left Hemisphere\fcTest_RefCorr.mat'],'fc_TestCorr');
 else
     fc_TestCorr = load(['D:\Data\' monkeyName '_SqM\Left Hemisphere\fcTest_RefCorr.mat'],'fc_TestCorr');
+    fc_TestCorr = fc_TestCorr.fc_TestCorr;
 end
 
 % Compiling spatial control data for all recordings
@@ -323,7 +324,7 @@ spCorrMinT(~goodRunsSpatial) = []; % Remove bad recordings
 spCorrMinT = -(cat(2,spCorrMinT{:})); % Pool the data
 
 % Show the distributions
-figure; violinplot(spCorrMinT);
+figure; violin(spCorrMinT','bw',0.1,'facecolor','b','edgecolor',[]);
 ylim([-1.2 1]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
 
 % Show the data points
@@ -345,7 +346,7 @@ spCorrMinFC(~goodRunsSpatial) = [];
 spCorrMinFC                   = (cat(2,spCorrMinFC{:}));
 
 % Show the distributions
-figure; violinplot(spCorrMinFC);
+figure; violin(spCorrMinFC','bw',0.1,'facecolor','b','edgecolor',[]);
 ylim([-1.2 1]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
 
 % Show the data points

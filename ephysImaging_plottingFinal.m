@@ -583,7 +583,7 @@ for iT = 1: length(timelineNew)
     end
 end
 
-timeLineRep = log10(reshape(repmat(timelineNew,[7 1]),[98 1]));
+timeLineRep = log2(reshape(repmat(timelineNew,[7 1]),[98 1]));
 
 % Show the temporal and spatial correlations over time
 % Spatial correlations
@@ -591,7 +591,7 @@ figure;
 for iBand = 1:5
     clear coeff xFit yFit mdl fVal idx
     subplot(2,3,iBand);
-    fVal = reshape(-fovGroupsNew(:,:,iBand)',[98 1]); 
+    fVal = (reshape(-fovGroupsNew(:,:,iBand)',[98 1])); 
     plot(timeLineRep,fVal,'o','MarkerSize',5,'MarkerFaceColor',[0 0.4470 0.7410]); hold on;
 
     idx   = isnan(fVal);
