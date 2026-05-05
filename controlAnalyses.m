@@ -118,7 +118,7 @@ clc; disp(['All physiology and imaging data for ' monkeyName ' loaded']);
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%% Spatial controls %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Correlate FC maps obtained from seeds placed at varying distances from 
-% the eectrode with the cross-modal map with maximum correspondence to FC
+% the electrode with the cross-modal map with maximum correspondence to FC
 % Initialize variables
 x = -200:200;
 negIdx = (-100<=x)&(x<=0); negVals = x(negIdx);
@@ -383,6 +383,18 @@ for iDate = 1:size(allDates,1)
         % Load clipmask
         [clipMaskCortex, corrMask] = getMasks(dataDir,runName);
 
+
+        % Load the vessel mask
+        if exist([dataDir '\skullMask.bmp'],'file') == 0
+            allCortexMask = imread([dataDir '\skullMask.png']); % Has vessels in this mask
+        else
+            allCortexMask = imread([dataDir '\skullMask.bmp']); % Has vessels in this mask
+        end
+
+        allCortexMask                    = imresize(allCortexMask,1/3); % Resizing cortex mask with vessels
+        allCortexMask                    = allCortexMask(:,:,1)>0;
+
+
         if ~exist([dataDir '\phaseControlVarsFOV.mat'],'file')
             % Get rs-ISOI data for the run
             pDatTemp = processedDat{iDate,iRun}.tempBandPass;
@@ -440,7 +452,7 @@ for iDate = 1:size(allDates,1)
                 szMin = szLFP;
             end
             
-            % Get timestams
+            % Get timestamps
             timeStamp       = probe{iRun,iDate}.timeStamp;
             timeStampSorted = timeStamp- timeStamp(1);
             badTimes10Hz    = unique(badTimeThreshTemp./1000);
@@ -613,3 +625,308 @@ xVar = [1:size(posValAll,1) fliplr((1:size(posValAll,1)))];
 patch(xVar,[posValAll(:,1)' fliplr(posValAll(:,2)')],[0.65 0.65 0.65],'FaceAlpha',0.3,'EdgeColor','none')
 xticklabels(winLen);  hold on;  ylim([-0.5 1]); yticks(-1:0.1:1);box off; ylim([-0.5 1]);
 xlabel('Length of window for shuffling (s)'); ylabel('Cross correlation'); grid off; hold on;
+
+%% Temporal control v2 -- Temporal relationship as a function of distance from electrode
+gammaBand  = [30 90]; [bG,aG] = butter(3,gammaBand./(1e3/2),'bandpass');% Gamma band filtering parameters
+distShift = {'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'};
+
+for iDate = 1:size(allDates,1)
+    clear expDate;
+    expDate = allDates(iDate,:);
+    for iRun = 1: size(allRuns{iDate,1},1)
+
+        clear runName dataDir clipMask clipMaskCortex corrMask lowIdx ...
+            pDatTemp greenFig seedLocIn crossCorrTemp allHybridMaps mapsAll...
+            peakNegHybridMap mapsAllTemp probeCh badTimes szLFP skullMask ...
+            inDatSize infraEphys allCortexMask szIm szMin roiDat
+
+        runName = allRuns{iDate,1}(iRun,:);
+
+        dataDir = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
+        serverDir = ['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\kem294\Data\' monkeyName '_SqM\' ...
+            hemisphere ' Hemisphere\' expDate '\' runName];
+        disp(['Date: ' expDate ' Run: ' runName])
+
+        % Load the vessel mask
+        if exist([dataDir '\skullMask.bmp'],'file') == 0
+            allCortexMask = imread([dataDir '\skullMask.png']); % Has vessels in this mask
+        else
+            allCortexMask = imread([dataDir '\skullMask.bmp']); % Has vessels in this mask
+        end
+
+        allCortexMask = imresize(allCortexMask,1/3); % Resizing cortex mask with vessels
+        allCortexMask = allCortexMask(:,:,1)>0;
+
+        seedRad  = round(roiSize{iDate}(iRun)./spatialBin);
+
+        minShift  = round(roiSize{iDate}(iRun)/spatialBin);
+        theta     = linspace(0,2*pi, round(pi*minShift)); % number of angles
+        maxPoints = length(theta);
+
+        % IMAGING: Load the appropriate masks for the imaging data
+        [clipMaskCortex, corrMask] = getMasks(dataDir,runName);
+
+        % Get rs-ISOI data for the run
+        pDatTemp = processedDat{iDate,iRun}.tempBandPass;
+        imSize   = size(pDatTemp);
+        greenFig = imresize(greenIm{iDate,iRun},1/spatialBin,'OutputSize',[imSize(1) imSize(2)]);
+
+        % Get ROI location and FC map
+        seedLocIn    = load([dataDir '\roiCenterLoc.mat']);
+        seedLocProbe = seedLocIn.seedLocProbe;
+        seedLocIn    = seedLocIn.seedLocIn;
+        circleRad    = 6;
+
+        % seedSigT     = calculateSeedSignal(greenFig,corrMask,...
+        %     seedLocIn,circleRad,pDatTemp); % Get Gaussian weighted seed signal
+        %
+        % fcMap             = plotCorrMap(seedSigT,pDatTemp,0); % Get FC map
+        % corrMaskT         = reshape(corrMask,[imSize(1)*imSize(2) 1]);
+        % fcMap             = reshape(fcMap,[361*438 1]);
+        % fcMap(~corrMaskT) = NaN;
+
+        pDatTemp   = reshape(pDatTemp,[imSize(1)*imSize(2) imSize(3)]);
+        clear processedDat10
+        parfor iP = 1:size(pDatTemp,1)
+            processedDat10(iP,:) = interp(pDatTemp(iP,:),5);
+        end
+
+        % Get LFP data
+
+        probeCh = probe{iRun,iDate}.probeCh;
+        ch      = estChInCortex{iDate}(iRun,:);
+
+        szIm           = size(processedDat10,2)*100;
+        szMin          = min([szIm,size(probeCh,1)]);
+        probeCh        = probeCh(1:szMin,:);
+        processedDat10 = processedDat10(:,1:floor(szMin/100));
+
+        badChannels      = badCh{iDate,iRun};
+        badTimes         = badTimesLFP{iDate,iRun};
+        badTimeThreshVal = badTimeThresh{iDate,iRun};
+
+        badTimes(badTimes>szMin)                 = [];
+        badTimeThreshVal(badTimeThreshVal>szMin) = [];
+
+        timeStamp       = probe{iRun,iDate}.timeStamp;
+        timeStampSorted = timeStamp- timeStamp(1);
+        badTimes10Hz    = unique(badTimeThreshVal./1000);
+        badTimeIm       = [];
+
+        % timeDiff = abs(timeStampSorted - badTimes10Hz);
+        % [~,badTimeIm] = min(timeDiff,[],2);
+        % badTimeIm = unique(badTimeIm);
+
+        % Identifying frames to be removed from rs-ISOI
+        for iT = 1: length(badTimes10Hz)
+            badTimeIm(iT) = find((floor(abs(timeStampSorted - badTimes10Hz(iT))*100)./100)<=0.05,1,'first'); %#ok<*AGROW>
+        end
+
+        badTimeIm = unique(badTimeIm);
+        badTimeIm(badTimeIm>size(processedDat10,2)) = [];
+
+        processedDat10(:,badTimeIm) = [];
+        probeCh(badTimes,:)    = [];
+        probeCh(:,badChannels) = [];
+
+        % Remove bad times determined visually from spectrogram
+        [probeCh,~,processedDat10] = removeBadTimesFromSpec(monkeyName,expDate,runName,probeCh,[],processedDat10);
+
+        % Get infraslow powers
+        infraEphys = mean(getInfraSlowPowerLFP(probeCh,bG,aG,ch),2);
+        szMin      = min([size(processedDat10,2),size(infraEphys,1)]);
+        infraEphys = infraEphys(1:szMin);
+        processedDat10 = processedDat10(:,1:szMin);
+        processedDat10R = reshape(processedDat10,[imSize(1) imSize(2) size(processedDat10,2)]);
+
+        roiDat = processedDat10R(seedLocIn(2)-round(seedRad/2):seedLocIn(2)+round(seedRad/2),...
+            seedLocIn(1)-round(seedRad/2):seedLocIn(1)+round(seedRad/2),:);
+
+        roiDatSize = size(roiDat);
+        roiDat = reshape(roiDat,[roiDatSize(1)*roiDatSize(2) roiDatSize(3)]);
+
+        clear roiElec magLowElec lagIdx lagLowElec locShift loc magLow lagLow ccROI
+
+        for iP = 1:size(roiDat,1)
+            if iP == 1
+                [roiElec(:,iP),lags(:,iP)]  = xcorr(infraEphys,roiDat(iP,:),200,'normalized');
+            else
+                [roiElec(:,iP),~]  = xcorr(infraEphys,roiDat(iP,:),200,'normalized');
+            end
+        end
+        lowIdx = lags<0 & lags>=-80;
+        xLow   = lags(lowIdx);
+        [magLowElec,lagIdx] = min(median(roiElec(lowIdx,:),2,'omitnan'));
+        lagLowElec = xLow(lagIdx)./10;
+
+        % figure;plot(lags./10,median(roiElec,2,'omitnan'))
+        % xlabel('Lag (s)'); ylabel('Correlation');
+        % xticks(-20:4:20);xline(0);box off
+
+        % Get 40 seeds at 0.5, 1, 2, 3,4 mm away from the electrode each
+        for iShift = 1:5
+            clear loc locShift row col pixelLoc
+            if iShift == 1
+                locShift = round(roiSize{iDate}(iRun)/spatialBin); % Get the distance from the electrode (radius)
+            else
+                locShift = round(roiSize{iDate}(iRun)*2*(iShift-1)/spatialBin);
+            end
+
+            % Get coordinates for a circle
+            loc(:,1) = round(locShift * cos(theta) + seedLocProbe(1));
+            loc(:,2) = round(locShift * sin(theta) + seedLocProbe(2));
+
+            % Check if there is any overlap between ROIs
+            % Get all ROIs
+            for iPoint = 1:size(loc,1)
+                if ~isnan(loc(iPoint,1))
+                    bboxRef = [loc(iPoint,1), loc(iPoint,2), round(seedRad), round(seedRad)];
+                    for iPoint2 = 1:size(loc,1)
+                        if iPoint2~=iPoint && ~isnan(loc(iPoint2,1))
+                            bboxTest = [loc(iPoint2,1), loc(iPoint2,2), round(seedRad), round(seedRad)];
+                            ratioVal = bboxOverlapRatio(bboxRef, bboxTest);
+                            if ratioVal>0.3
+                                loc(iPoint2,:) = NaN;
+                            end
+                        end
+                    end
+                end
+            end
+
+            % Calculate the temporal cross-correlation between LFP and ISOI
+            for iPoint = 1:size(loc,1)
+                if ~isnan(loc(iPoint,1))
+                    if any((fliplr(loc(iPoint,:))+seedRad)>size(greenFig)) || any(loc(iPoint,:)-seedRad<= 0)
+                        loc(iPoint,:) = NaN;
+                        magLow(iShift,iPoint) = NaN;
+                        lagLow(iShift,iPoint) = NaN;
+
+                    else % Get FC maps
+                        seed = loc(iPoint,:);
+                        clipMask_seed = ~corrMask(seed(2)-seedRad:seed(2)+seedRad,seed(1)-seedRad:seed(1)+seedRad);
+                        allCortex_seed = ~allCortexMask(seed(2)-seedRad:seed(2)+seedRad,seed(1)-seedRad:seed(1)+seedRad);
+                        maskSize = size(clipMask_seed,1) *size(clipMask_seed,2);
+
+                        % Check if the masks occupy more than 50% of seed
+                        % or if the seeds are close to the edge (the edges
+                        % of the image should at max occupy 25% of seed)
+                        if ((sum(clipMask_seed,'all')/maskSize)>0.5) || ((sum(allCortex_seed,'all')/maskSize)>0.25)
+                            loc(iPoint,:)         = NaN;
+                            magLow(iShift,iPoint) = NaN;
+                            lagLow(iShift,iPoint) = NaN;
+                            continue;
+
+                        else
+                            % Get the ROI
+                            inDat = processedDat10R(loc(iPoint,2)-round(seedRad/2):loc(iPoint,2)+round(seedRad/2),...
+                                loc(iPoint,1)-round(seedRad/2):loc(iPoint,1)+round(seedRad/2),:);
+
+                            inDatSize = size(inDat);
+                            inDat = reshape(inDat,[inDatSize(1)*inDatSize(2) inDatSize(3)]);
+
+                            for iP = 1:size(inDat,1)
+                                if iP == 1
+                                    [ccROI(:,iP),lags(:,iP)]  = xcorr(infraEphys',inDat(iP,:),200,'normalized');
+                                else
+                                    [ccROI(:,iP),~]  = xcorr(infraEphys',inDat(iP,:),200,'normalized');
+                                end
+                            end
+
+                            roiVals{iShift,iPoint} = reshape(ccROI,[401 inDatSize(1) inDatSize(2)]);
+                            ccProfile(iShift,iPoint,:) = median(ccROI,2,'omitnan');
+                            % Set the lag limit to determine peak negative
+                            xLow   = lags(lowIdx);
+                            [magLow(iShift,iPoint),lagIdx] = min(median(ccROI(lowIdx,:),2,'omitnan'));
+                            lagLow(iShift,iPoint) = xLow(lagIdx)./10;
+                        end
+                    end
+                else
+                    magLow(iShift,iPoint) = NaN;
+                    lagLow(iShift,iPoint) = NaN;
+                    ccProfile(iShift,iPoint,1:401) = NaN;
+                end
+                locVals{iDate,iRun,iShift} = loc;
+            end
+        end
+        magLowAll{iDate,iRun} = magLow;
+        lagLowAll{iDate,iRun} = lagLow; 
+        ccProfileAll{iDate,iRun} = ccProfile;
+    end
+end
+
+%% Figures for an individual site
+
+figure;boxplot(magLow');
+axis square; box off; 
+xticks(1:5)
+xticklabels({'0.5','1','2','3','4'});
+ylabel('Peak Correlation')
+xlabel('Distance from electrode')
+
+figure; boxplot(lagLow');
+axis square; box off; 
+xticks(1:5)
+xticklabels({'0.5','1','2','3','4'});
+ylabel('Lag(s)')
+xlabel('Distance from electrode');
+
+
+figure;plot(lags./10,median(roiElec,2,'omitnan'))
+xlabel('Lag (s)'); ylabel('Correlation');
+xticks(-20:4:20);xline(0);box off
+
+figure; 
+subplot(321); plot(lags./10,squeeze(ccProfile(1,:,:)),'Color',[169/256, 169/256,169/256]); 
+ylim([-0.5 0.35]);axis square; box off; title('0.5 mm');
+subplot(322); plot(lags./10,squeeze(ccProfile(2,:,:)),'Color',[169/256, 169/256,169/256]);
+ylim([-0.5 0.35]);axis square; box off; title('1 mm');
+subplot(323); plot(lags./10,squeeze(ccProfile(3,:,:)),'Color',[169/256, 169/256,169/256]);
+ylim([-0.5 0.35]);axis square; box off; title('2 mm');
+subplot(324); plot(lags./10,squeeze(ccProfile(4,:,:)),'Color',[169/256, 169/256,169/256]);
+ylim([-0.5 0.35]);axis square; box off; title('3 mm');
+subplot(325); plot(lags./10,squeeze(ccProfile(5,:,:)),'Color',[169/256, 169/256,169/256]);
+ylim([-0.5 0.35]);axis square; box off; title('4 mm');
+
+%
+figure;
+imagesc(greenFig); hold on; colormap gray
+for iShift = 1:5
+    locAll = locVals{iDate,iRun,iShift};
+    plot(locAll(:,1),locAll(:,2),'ow','MarkerSize',5,'MarkerFaceColor','w'); 
+end
+axis image; box off; axis off; 
+
+
+%%
+
+figure;
+imagesc(greenFig); hold on; colormap gray;
+axis image; box off; %axis off; 
+for iPoint = 1:41
+
+%     bboxA = [loc(iPoint,1), loc(iPoint,2), round(seedRad), round(seedRad)];
+% % bboxB = [loc(iPoint,1), loc(iPoint,2), round(seedRad/2), round(seedRad/2)];
+
+% plot(locAll(iPoint,1),locAll(iPoint,2),'ow','MarkerSize',5,'MarkerFaceColor','w');
+y1 = loc(iPoint,2)-round(seedRad/2); y2 = loc(iPoint,2)+round(seedRad/2);
+x1 = loc(iPoint,1)-round(seedRad/2); x2 = loc(iPoint,1)+round(seedRad/2);
+
+x = [x1 x2 x2 x1 x1];
+y = [y1 y1 y2 y2 y1];
+plot(x,y,'w-');
+% rectangle('Position',bboxA)
+% % rectangle('Position',bboxB)
+end
+%%
+   bboxA = [loc(1,1), loc(1,2), round(seedRad), round(seedRad)];
+bboxB = [loc(20,1), loc(20,2), round(seedRad), round(seedRad)];
+
+
+ratio = bboxOverlapRatio(bboxA, bboxB);
+
+figure;
+imagesc(greenFig); hold on; colormap gray;
+rectangle('Position',bboxRef)
+rectangle('Position',bboxTest)
+
+%% Grouping all data for temporal controls v2

@@ -322,8 +322,12 @@ boxplot(corrFC_Avg_SessionWise(:,10:end),'Labels',{4, 16, 20, 23});
 xlabel('Months'); ylabel('Correlations between session and average FC');
 box off;ylim([0 1]); 
 
+fcAvgSession = corrFC_Avg_SessionWise(:,10:end); 
+nanVals  = isnan(fcAvgSession(:,2));
+fcAvgSession(nanVals,:) = [];
+
 % ANOVA to compare the distributions
-[pSpCorrT,tblSpCorrT,statsSpCorrT] = anova1(corrFC_Avg_SessionWise(:,10:end),{'4', '16', '20', '23'},'off');
+[pSpCorrT,tblSpCorrT,statsSpCorrT] = anova1(fcAvgSession,{'4', '16', '20', '23'},'off');
 [rSpCorrT,mSpCorrT,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.01);
 
 tblSpCorrMT = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
