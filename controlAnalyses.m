@@ -11,6 +11,8 @@ addpath(genpath([commonDir '\Codes\ISOI_Ephys\neuroshare']));
 addpath(genpath([commonDir '\Codes\Ephys']));
 addpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12']));
 rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\fly_track\videoIO']));
+rmpath(genpath([commonDir '\Codes\chronux_2_12\spectral_analysis\continuous\dupes']));
+rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\spectral_analysis\continuous\dupes']));
 
 %% Initialize variables and get monkey data
 hemisphere = 'Left'; spatialBin = 3;
@@ -142,6 +144,17 @@ for iDate = 1:size(allDates,1)
         % IMAGING: Load the appropriate masks for the imaging data
         [clipMaskCortex, corrMask] = getMasks(dataDir,runName);
 
+        % Load the vessel mask
+        if exist([dataDir '\skullMask.bmp'],'file') == 0
+            allCortexMask = imread([dataDir '\skullMask.png']); % Has vessels in this mask
+        else
+            allCortexMask = imread([dataDir '\skullMask.bmp']); % Has vessels in this mask
+        end
+
+        allCortexMask                    = imresize(allCortexMask,1/3); % Resizing cortex mask with vessels
+        allCortexMask                    = allCortexMask(:,:,1)>0;
+
+
         % Get rs-ISOI data for the run
         pDatTemp = processedDat{iDate,iRun}.tempBandPass;
         imSize   = size(pDatTemp);
@@ -182,7 +195,7 @@ for iDate = 1:size(allDates,1)
         pDatTemp = reshape(pDatTemp,[imSize(1) imSize(2) imSize(3)]);
        
         tic;
-        if ~exist([dataDir '\spatialControlVarsFOV.mat'],'file') 
+        if ~exist([dataDir '\spatialControlVarsFOV.mat'],'file')
             clear  lagLow  hybridLowMap runWiseSpatialCorr runWiseSpatialTimes locAll corrHybridMap
             % Get 40 seeds at 0.5, 1, 2, 3,4 mm away from the electrode each
    
@@ -228,7 +241,7 @@ for iDate = 1:size(allDates,1)
                             runWiseSpatialCorr(iShift,iPoint)      = NaN;
                             runWiseSpatialTimes(iShift,iPoint)     = NaN;
                             loc(iPoint,:)                          = NaN;
-                            fc_TestCorr{iRun,iDate}(iShift,iPoint) = NaN;
+                            fc_TestCorir{iRun,iDate}(iShift,iPoint) = NaN;
                             continue;
 
                         else
@@ -334,6 +347,7 @@ y1 = reshape(spCorrMinT',[pointSize(2)*5 1]);
 s = swarmchart(x1,y1,5,'b','filled');
 s.XJitterWidth = 0.5; box off;
 xticks(1:5);xticklabels({'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
+ylim([-1 1.2]);
 
 % Show how FC at test sites relate to the reference
 clear spCorrMinFC zeroInd
@@ -856,14 +870,14 @@ end
 
 %% Figures for an individual site
 
-figure;boxplot(magLow');
+figure;boxplot(magLowAll{iDate,iRun}');
 axis square; box off; 
 xticks(1:5)
 xticklabels({'0.5','1','2','3','4'});
 ylabel('Peak Correlation')
 xlabel('Distance from electrode')
 
-figure; boxplot(lagLow');
+figure; boxplot(lagLowAll{iDate,iRun}');
 axis square; box off; 
 xticks(1:5)
 xticklabels({'0.5','1','2','3','4'});
@@ -896,37 +910,486 @@ for iShift = 1:5
 end
 axis image; box off; axis off; 
 
+%% Grouping all data for temporal controls v2
+% Normalize correlations within a recording relative to the minima and pool
+% all correlations (variance comes from the seeds placed)
+magLowT = reshape(cellfun(@(x) x./abs(min(x,[],'all','omitnan')),magLowAll,'un',0),[size(magLowAll,1)*size(magLowAll,2) 1]);
+zeroInd    = cell2mat(cellfun(@(x) isempty(x),magLowT,'un',0));
+
+magLowT(zeroInd)          = [];
+magLowT(~goodRunsSpatial) = []; % Remove bad recordings
+
+magLowT = -(cat(2,magLowT{:})); % Pool the data
+
+save(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\tempControlsROI.mat'],'magLowT','magLowAll','ccProfile','lags');
+
+%% Statistics 
+
+[pSpCorrT,tblSpCorrT,statsSpCorrT] = anova1(magLowT',{'0.5', '1', '2', '3' , '4'},'off');
+[rSpCorrT,mSpCorrT,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.01);
+
+tblSpCorrMT = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
+    "Difference","Upper limit","p-val"]);
+tblSpCorrMT.("Group") = gnamesSpCorrT(tblSpCorrMT.("Group"));
+tblSpCorrMT.("Control Group") = gnamesSpCorrT(tblSpCorrMT.("Control Group"));
+
+
+%% Show the distributions
+figure; violin(magLowT','bw',0.07,'facecolor','b','edgecolor',[]);
+ylim([-1.2 1]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
+
+% figure; boxplot(magLowT');
+% ylim([-1.2 1]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
+
+% Show the data points
+pointSize = size(magLowT);
+x1 = (reshape(repmat(1:5,[pointSize(2) 1]),[pointSize(2)*5 1]));
+y1 = reshape(magLowT',[pointSize(2)*5 1]);
+s = swarmchart(x1,y1,5,'b','filled');
+s.XJitterWidth = 0.5; box off; 
+xticks(1:5);xticklabels({'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'}); 
+yticks(-1:0.2:1.4); ylim([-0.7 1.2])
+ylabel('Normalized cross-correlation')
 
 %%
+[f1,xf1] = kde(magLowT(3,:)','Support', [-0.5 1.2]);
+figure; violinplot(EvaluationPoints=xf1,DensityValues=f1)
+ ylim([-.5,1.5])
 
-figure;
-imagesc(greenFig); hold on; colormap gray;
-axis image; box off; %axis off; 
-for iPoint = 1:41
+%% Visualizing the edge frequencies within a run 
 
-%     bboxA = [loc(iPoint,1), loc(iPoint,2), round(seedRad), round(seedRad)];
-% % bboxB = [loc(iPoint,1), loc(iPoint,2), round(seedRad/2), round(seedRad/2)];
+iDate = 2; 
+% expDate    = '10_16_2023'; 
+% fileNum    = 1:7;
+% monkeyName = 'Whiskey'; 
+% hemisphere = 'Left';
 
-% plot(locAll(iPoint,1),locAll(iPoint,2),'ow','MarkerSize',5,'MarkerFaceColor','w');
-y1 = loc(iPoint,2)-round(seedRad/2); y2 = loc(iPoint,2)+round(seedRad/2);
-x1 = loc(iPoint,1)-round(seedRad/2); x2 = loc(iPoint,1)+round(seedRad/2);
+params.Fs       = 1e3; 
+params.fpass    = [2 120];
+params.pad      = -1;
+params.tapers   = [3 5];
+params.trialave = 0;
 
-x = [x1 x2 x2 x1 x1];
-y = [y1 y1 y2 y2 y1];
-plot(x,y,'w-');
-% rectangle('Position',bboxA)
-% % rectangle('Position',bboxB)
+edgeFreq = [];
+
+% saveFolder = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\Electrophysiology\Processed Data'];
+
+
+% eegPSD = NaN(120,length(fileNum)); % Pre-allocating variables
+% animalStateIso = [1.2 2.25 3.25 1]; % Isoflurane levels for procedure on 10_17_2022,runs 5-8
+
+% Extract/load EEG for the specified runs
+for iFile = 1:length(allRuns{iDate,1})
+    clear eegCh eegPSDT spec powMeansS badTimeThresh badTimeIndOld badTimeInd
+    try
+
+        eegCh = probe{iFile,iDate}.eegCh;
+        % badTimes         = badTimesLFP{iDate,iRun};
+
+        % Obtain the spectrogram
+        [spec,timeValsSpec,~] = mtspecgramc(eegCh,[5 3],params);
+
+        % Remove bad time segments
+        powMeanS = squeeze(sum(spec,2)); % Calculate cumulative powers
+        badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1)); % Determine threshold bounds
+        badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3; % Identify threshold crossings
+        badTimes = [];
+
+        % Extract 1 s interval before and after each threshold crossing
+        if ~isempty(badTimeIndOld)
+            badTimes = [];
+            badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)'];
+
+            for iL = 1:size(badTimeInd,1)
+                badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
+            end
+            badTimes = unique(badTimes);
+        end
+
+        % Remove bad time segments
+        eegCh(badTimes,:) = [];
+
+        % Calculate edge frequencies (frequency where cumulative power>90%)
+        [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegCh,[2 1],params);
+        cumPowFreq = cumsum(spec,2);
+        mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+        [~,highPowerIdx] = max(mat,[],2);
+        edgeFreq{iFile} = freqValsSpec(highPowerIdx);
+
+        % meanFreqW(iFile) = median(freqValsSpec(highPowerIdx)); % Edge frequency
+        %
+        % % Get EEG power for frequencies from 20-60 Hz
+        % idx = freqValsSpec>=20 & freqValsSpec<=60;
+        % animalStateCheckW(iFile) = median(10.*log10(spec(:,idx)),'all','omitnan');
+    catch
+        continue;
+    end
+end
+
+%% 
+allEdgeFreq = single(cat(2,edgeFreq{:}));
+figure; plot(allEdgeFreq); hold on
+plot(movmean(allEdgeFreq,60),'k','LineWidth',2);box off;
+lenVal = cumsum(cellfun(@length,edgeFreq));
+xline(lenVal,'Color',[51/255 51/255 51/255],'LineWidth',2);
+ylabel('Edge Frequency (Hz)'); xlabel('Time (s)'); xlim([0 lenVal(end)]);
+
+[up,lo] = envelope(allEdgeFreq,60,'peak');
+plot(up,'r','LineWidth',2); plot(lo,'r','LineWidth',2);
+
+% figure; plot(up-lo);
+% ylabel('Upper-lower enveloope');xlabel('Time (s)'); xlim([0 lenVal(end)]);
+% xline(lenVal,'Color',[51/255 51/255 51/255]); box off;
+
+%% 
+movAvg = smoothdata(movmean(allEdgeFreq,60)); 
+% d = diff(movAvg);
+% figure; plot(d); hold on;xlabel('Time (s)'); xlim([0 lenVal(end)]);
+% xline(lenVal,'Color',[51/255 51/255 51/255]); box off;
+
+
+% [h,p,Z,S] = Mann_Kendall(movAvg,0.05);
+
+
+
+xVal = (1:lenVal(end))./60; yVal = movAvg;
+
+[taub, tau, h, sig, Z, S, sen ]   = ktaub([yVal; xVal]', 0.001, 0);
+
+
+coeff = fit(xVal',double(yVal)','poly1','Robust','LAR');
+xFit  = linspace(min(xVal),max(xVal),1000);
+yFit  = coeff.p1*xFit + coeff.p2; 
+mdl = fitlm(xVal',yVal','RobustOpts','on');
+
+figure; plot(xVal,movmean(allEdgeFreq,60),'LineWidth',1); 
+hold on;plot(xVal,movAvg,'LineWidth',2);box off; 
+xlabel('Time (minutes)'); xlim([0 lenVal(end)/60]);ylabel('Edge Frequency (Hz)');
+plot(xFit,yFit,'--k','LineWidth',2); xticks(0:10:100);
+xline(lenVal./60,'Color',[51/255 51/255 51/255]);
+
+%%
+lenSingle = cellfun(@length,edgeFreq);
+% idx = 1;
+for iL = 1:length(lenVal)
+    clear coeff
+   xVal = 1:lenSingle(iL);
+   yVal = smoothdata(movmean(edgeFreq{iL},60)) ;
+   coeff = polyfit(xVal',yVal',1); 
+   slope(iL) = coeff(1);
+   yValNew{iL} = yVal;
+   % idx = idx+lenSingle(iL);
+end
+figure;plot(slope)
+box off
+ylabel('Slope');
+
+% 1. change the time interval to hours/minutes instead of seconds
+
+
+%% For experiment date: 10_16_2023
+l = load('\\smb2.neurobio.pitt.edu\Gharbawie\Lab\Data\303-19_Whiskey_SqM\Left Hemisphere\10_16_2023\run00\Whiskey_10162023_run00_EEG_EKG_data.mat');
+eegStart = l.storedData(:,1); 
+
+[spec,timeValsSpec,~] = mtspecgramc(eegStart,[5 3],params);
+
+% Remove bad time segments
+powMeanS = squeeze(sum(spec,2)); % Calculate cumulative powers
+badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1)); % Determine threshold bounds
+badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3; % Identify threshold crossings
+badTimes = [];
+
+% Extract 1 s interval before and after each threshold crossing
+if ~isempty(badTimeIndOld)
+    badTimes = [];
+    badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)'];
+
+    for iL = 1:size(badTimeInd,1)
+        badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
+    end
+    badTimes = unique(badTimes);
+end
+
+% Remove bad time segments
+eegStart(badTimes,:) = [];
+
+% Calculate edge frequencies (frequency where cumulative power>90%)
+[spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegStart,[2 1],params);
+cumPowFreq = cumsum(spec,2);
+mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+[~,highPowerIdx] = max(mat,[],2);
+edgeFreqStart = freqValsSpec(highPowerIdx);
+
+figure;plot(edgeFreqStart);
+
+figure;plot([edgeFreqStart allEdgeFreq]);
+hold on;
+plot(movmean([edgeFreqStart allEdgeFreq],60),'k','LineWidth',2);box off;
+lenValNew = cumsum([length(edgeFreqStart) cellfun(@length,edgeFreq)]);
+xline(lenValNew,'Color',[51/255 51/255 51/255],'LineWidth',2);
+
+lenSingle = [length(edgeFreqStart) cellfun(@length,edgeFreq)];
+% idx = 1;
+for iL = 1:length(lenSingle)
+    clear coeff
+    xVal = (1:lenSingle(iL))./60;
+    if iL== 1
+        yVal = smoothdata(movmean(edgeFreqStart,60));
+    else
+        yVal = smoothdata(movmean(edgeFreq{iL-1},60)) ;
+    end
+    coeff = polyfit(xVal',yVal',1);
+    slope(iL) = coeff(1);
+    % yValNew{iL} = yVal;
+    % idx = idx+lenSingle(iL);
+end
+figure;plot(slope)
+box off
+ylabel('Slope');
+
+[taub, tau, h, sig, Z, S, sen ]   = ktaub([movAvg; xVal]', 0.001, 0);
+
+
+
+movAvg = smoothdata(movmean([edgeFreqStart allEdgeFreq],60)); 
+
+xVal = (1:lenValNew(end))./60; yVal = movAvg;
+coeff = fit(xVal',double(yVal)','poly1','Robust','LAR');
+xFit  = linspace(min(xVal),max(xVal),1000);
+yFit  = coeff.p1*xFit + coeff.p2; 
+mdl = fitlm(xVal',yVal','RobustOpts','on');
+
+figure; plot(xVal,movmean([edgeFreqStart allEdgeFreq],60),'LineWidth',1); 
+hold on;plot(xVal,movAvg,'LineWidth',2);box off; 
+xlabel('Time (minutes)'); xlim([0 lenValNew(end)/60]);ylabel('Edge Frequency (Hz)');
+plot(xFit,yFit,'--k','LineWidth',2);xticks(0:10:120);xticklabels(0:10:120);
+xline(lenValNew./60,'Color',[51/255 51/255 51/255]);
+
+%% For experiments conducted on'02_20_2024' and '04_29_2024'
+fs = 1e3;
+[b,a] = butter(3,[1 250]./(fs/2),'bandpass'); % Bandpass filtering parameters across 1-250 Hz
+[bS,aS] = butter(3,[57 62]./(fs/2),'stop'); % Bandstop filtering between 57-62 Hz
+
+expDate = '12_04_2023';
+datName = [serverPath expDate '\Electrophysiology\run00\datafile0001'];
+[nsResult,hFile] = ns_OpenFile(datName);
+
+
+[nsResult2, fileInfo] = ns_GetFileInfo(hFile);
+for iEntity = 1: fileInfo.EntityCount
+    [~,entityInfo(iEntity,1)] = ns_GetEntityInfo(hFile,iEntity);  %#ok<SAGROW>
+end
+
+[~, analogInfo2] = ns_GetAnalogInfo(hFile, 5);
+
+fs_ns5  = analogInfo2.SampleRate;
+clear elecList elecID
+
+elecList   = find([entityInfo.EntityType] == 2);
+elecLabel  = {entityInfo(elecList).EntityLabel}; % Gets the label of all the channels in lfpList
+elecIdx    = cell2mat(cellfun(@(x) strcmp(x(1:end-2),'analog'),elecLabel,'un',0));
+elecList(~elecIdx) = [];
+elecLabel(~elecIdx) = [];
+elecCount = entityInfo(elecList(1)).ItemCount;
+
+if ~isempty(elecList) && strcmp(elecLabel{1},'analog 1')
+    [~, ~, eegStart2] = ns_GetAnalogData(hFile,elecList(1),1,elecCount);
+    eegStart2 = filtfilt(b,a,eegStart2);
+    eegStart2 = single(filtfilt(bS,aS,eegStart2));
+end
+
+
+%%
+[spec,timeValsSpec,~] = mtspecgramc(eegStart2,[5 3],params);
+
+% Remove bad time segments
+powMeanS = squeeze(sum(spec,2)); % Calculate cumulative powers
+badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1)); % Determine threshold bounds
+badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3; % Identify threshold crossings
+badTimes = [];
+
+% Extract 1 s interval before and after each threshold crossing
+if ~isempty(badTimeIndOld)
+    badTimes = [];
+    badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)'];
+
+    for iL = 1:size(badTimeInd,1)
+        badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
+    end
+    badTimes = unique(badTimes);
+end
+
+% Remove bad time segments
+eegStart2(badTimes,:) = [];
+
+% Calculate edge frequencies (frequency where cumulative power>90%)
+[spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegStart2,[2 1],params);
+cumPowFreq = cumsum(spec,2);
+mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+[~,highPowerIdx] = max(mat,[],2);
+edgeFreqStart = freqValsSpec(highPowerIdx);
+
+figure;plot([edgeFreqStart allEdgeFreq]);
+hold on;
+plot(movmean([edgeFreqStart allEdgeFreq],60),'k','LineWidth',2);box off;
+lenValNew = cumsum([length(edgeFreqStart) cellfun(@length,edgeFreq)]);
+xline(lenValNew,'Color',[51/255 51/255 51/255],'LineWidth',2);
+
+lenSingle = [length(edgeFreqStart) cellfun(@length,edgeFreq)];
+% idx = 1;
+for iL = 1:length(lenSingle)
+    clear coeff
+    xVal = 1:lenSingle(iL);
+    if iL== 1
+        yVal = smoothdata(movmean(edgeFreqStart,60));
+    else
+        yVal = smoothdata(movmean(edgeFreq{iL-1},60)) ;
+    end
+    coeff = polyfit(xVal',yVal',1);
+    slope(iL) = coeff(1);
+    % yValNew{iL} = yVal;
+    % idx = idx+lenSingle(iL);
+end
+figure;plot(slope)
+box off
+ylabel('Slope');
+
+movAvg = smoothdata(movmean([edgeFreqStart allEdgeFreq],60)); 
+
+xVal = (1:lenValNew(end))./60; yVal = movAvg;
+
+[taub, tau, h, sig, Z, S, sen ]   = ktaub([movAvg; xVal]', 0.001, 0);
+
+
+coeff = fit(xVal',double(yVal)','poly1','Robust','LAR');
+xFit  = linspace(min(xVal),max(xVal),1000);
+yFit  = coeff.p1*xFit + coeff.p2; 
+mdl = fitlm(xVal',yVal','RobustOpts','on');
+
+figure; plot(xVal,movmean([edgeFreqStart allEdgeFreq],60),'LineWidth',1); 
+hold on;plot(xVal,movAvg,'LineWidth',2);box off; 
+xlabel('Time (minutes)'); xlim([0 lenValNew(end)/60]);ylabel('Edge Frequency (Hz)');
+plot(xFit,yFit,'--k','LineWidth',2);xticks(0:10:120);xticklabels(0:10:120);
+xline(lenValNew./60,'Color',[51/255 51/255 51/255]);
+
+%%  For experiment date: 08_14_2023
+expDate = '08_14_2023';
+expDate1 = '08142023';
+
+if iM == 1
+    monkeyID = '302-19'; % Charlie Sheen
+else
+    monkeyID = '303-19'; % Whiskey
+end
+
+clear edgeFreqStart
+index = 1;
+for iR = 1:9     
+
+    clear l eegStart spec timeValsSpec powMeanS badTimeThresh badTimeIndOld badTimes
+    % if iR == 2 || iR ==4; continue; end
+    try
+        l = load(['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\Data\' monkeyID '_' monkeyName '_SqM' ...
+            '\Left Hemisphere\' expDate '\run0' num2str(iR-1) '\' monkeyName '_' expDate1 '_run0' num2str(iR-1) '_EEG_EKG_data.mat']);
+
+        eegStart = l.storedData(:,1);
+
+        [spec,timeValsSpec,~] = mtspecgramc(eegStart,[5 3],params);
+
+        % Remove bad time segments
+        powMeanS = squeeze(sum(spec,2)); % Calculate cumulative powers
+        badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1)); % Determine threshold bounds
+        badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3; % Identify threshold crossings
+        badTimes = [];
+
+        % Extract 1 s interval before and after each threshold crossing
+        if ~isempty(badTimeIndOld)
+            badTimes = [];
+            badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)'];
+
+            for iL = 1:size(badTimeInd,1)
+                badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
+            end
+            badTimes = unique(badTimes);
+        end
+
+        % Remove bad time segments
+        eegStart(badTimes,:) = [];
+
+        % Calculate edge frequencies (frequency where cumulative power>90%)
+        [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegStart,[2 1],params);
+        cumPowFreq = cumsum(spec,2);
+        mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
+        [~,highPowerIdx] = max(mat,[],2);
+        edgeFreqStart{index} = freqValsSpec(highPowerIdx);
+        index = index+1;
+
+    catch
+        continue;
+    end
+
 end
 %%
-   bboxA = [loc(1,1), loc(1,2), round(seedRad), round(seedRad)];
-bboxB = [loc(20,1), loc(20,2), round(seedRad), round(seedRad)];
+edgeFreqStartT = cat(2,edgeFreqStart{:});%cat(2,[edgeFreqStart{:} edgeFreq{:}]); %
+varHourscell2mat(cellfun(@(x) std(x).^2,edgeFreqStart,'un',0));
+figure;plot(edgeFreqStartT);
+hold on;
+[up,lo] = envelope(edgeFreqStartT,10,'analytic');
+plot(up,'r','LineWidth',2); plot(lo,'r','LineWidth',2);
+
+plot(movmean(edgeFreqStartT,60),'k','LineWidth',2);box off;
+% lenValNew = cumsum(cellfun(@length,[edgeFreqStart edgeFreq]));
+lenValNew = cumsum(cellfun(@length,edgeFreqStart));
+xline(lenValNew,'Color',[51/255 51/255 51/255],'LineWidth',2);
+
+lenSingle = cellfun(@length,edgeFreqStart);
+% % idx = 1;
+% for iL = 1:length(lenSingle)
+%     clear coeff
+%     xVal = (1:lenSingle(iL))./60;
+%     if iL== 1
+%         yVal = smoothdata(movmean(edgeFreqStart,60));
+%     else
+%         yVal = smoothdata(movmean(edgeFreq{iL-1},60)) ;
+%     end
+%     coeff = polyfit(xVal',yVal',1);
+%     slope(iL) = coeff(1);
+%     % yValNew{iL} = yVal;
+%     % idx = idx+lenSingle(iL);
+% end
+% figure;plot(slope)
+% box off
+% ylabel('Slope');
 
 
-ratio = bboxOverlapRatio(bboxA, bboxB);
+movAvg = smoothdata(movmean(edgeFreqStartT,60)); 
+xVal = (1:lenValNew(end))./60; yVal = movAvg;
 
-figure;
-imagesc(greenFig); hold on; colormap gray;
-rectangle('Position',bboxRef)
-rectangle('Position',bboxTest)
+[taub, tau, h, sig, Z, S, sen ]   = ktaub([movAvg; xVal]', 0.001, 0);
 
-%% Grouping all data for temporal controls v2
+
+coeff = fit(xVal',double(yVal)','poly1','Robust','LAR');
+xFit  = linspace(min(xVal),max(xVal),1000);
+yFit  = coeff.p1*xFit + coeff.p2; 
+mdl = fitlm(xVal',yVal','RobustOpts','on');
+
+figure; plot(xVal,movmean(edgeFreqStartT,60),'LineWidth',1); 
+hold on;plot(xVal,movAvg,'LineWidth',2);box off; 
+xlabel('Time (minutes)'); xlim([0 lenValNew(end)/60]);ylabel('Edge Frequency (Hz)');
+plot(xFit,yFit,'--k','LineWidth',2);xticks(0:10:200);xticklabels(0:10:200);
+xline(lenValNew./60,'Color',[51/255 51/255 51/255]);
+
+%%
+tauAll = [-0.01 0.12 -0.03 -0.06 -0.18 ];
+rsqAll = [0.03 0.24 0.22 0.08 0.13];
+slope  = [0.01 0.035 -0.01 0.007 -0.023 ];
+
+%% Spectrogram
+
+ figure;imagesc(timeValsSpec,freqValsSpec,10.*log10(spec)')
+set(gca,'YDir','reverse')
+set(gca,'YDir','normal')
+colorbar
+clim([-30 30])
+box off
+xlabel('Time (s)'); ylabel('Freq (Hz)')
