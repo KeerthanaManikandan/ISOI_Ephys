@@ -11,7 +11,7 @@ rmpath(genpath([commonDir '\Codes\ISOI_Ephys\chronux_2_12\spectral_analysis\cont
 
 %% Initialize variables and get monkey data
 hemisphere = 'Left'; spatialBin = 3;
-iM = 1; % 1 - Charlie Sheen, 2 - Whiskey
+iM = 2; % 1 - Charlie Sheen, 2 - Whiskey
 
 % Get good runs, channel info, location of electorde in a date x run format
 switch iM
@@ -426,7 +426,7 @@ for iM = 1:3
 end
 
 %%
- cols = 1:11;
+ cols = 1:2:12;
 
 for iVar = 1:5
     switch iVar
@@ -447,10 +447,9 @@ for iVar = 1:5
             titleName = 'Median of edge frequencies (moving average)';
     end 
 
-    % data = cell2mat(arrayfun(@(c) var(:,[c c+1]), cols, 'UniformOutput', false));
-    data = cell2mat(arrayfun(@(c) median(var(:,[c c+1]), 2,'omitnan'), cols, 'UniformOutput', false));
-    % groupLabels = repelem(cols, 9*2);  
-    groupLabels = repelem(cols,9);
+
+    data = cell2mat(arrayfun(@(c) var(:,[c c+1]), cols, 'UniformOutput', false));
+    groupLabels = repelem(1:length(cols), 9*2);
 
     figure;
     boxplot(data(:), groupLabels);
@@ -484,7 +483,8 @@ for iVar = 1: 5
             var = edgeMedian;
         case 5
             var = movAvgMedian;
-    end
+    end  
+
     for iExp = 1:size(movAvgMedian,1)
         yVal = var(iExp,:);
         yVal = yVal(~isnan(yVal));

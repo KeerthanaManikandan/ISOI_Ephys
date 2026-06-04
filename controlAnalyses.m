@@ -154,9 +154,10 @@ for iDate = 1:size(allDates,1)
         allCortexMask                    = imresize(allCortexMask,1/3); % Resizing cortex mask with vessels
         allCortexMask                    = allCortexMask(:,:,1)>0;
 
-
-        % Get rs-ISOI data for the run
-        pDatTemp = processedDat{iDate,iRun}.tempBandPass;
+        tic;
+        if ~exist([dataDir '\spatialControlVarsFOV.mat'],'file')
+            % Get rs-ISOI data for the run
+            pDatTemp = processedDat{iDate,iRun}.tempBandPass;
         imSize   = size(pDatTemp);
         greenFig = imresize(greenIm{iDate,iRun},1/spatialBin,'OutputSize',[imSize(1) imSize(2)]);
         
@@ -194,8 +195,7 @@ for iDate = 1:size(allDates,1)
         disp('Obtaining spatial controls...');
         pDatTemp = reshape(pDatTemp,[imSize(1) imSize(2) imSize(3)]);
        
-        tic;
-        if ~exist([dataDir '\spatialControlVarsFOV.mat'],'file')
+        
             clear  lagLow  hybridLowMap runWiseSpatialCorr runWiseSpatialTimes locAll corrHybridMap
             % Get 40 seeds at 0.5, 1, 2, 3,4 mm away from the electrode each
    
@@ -338,7 +338,7 @@ spCorrMinT = -(cat(2,spCorrMinT{:})); % Pool the data
 
 % Show the distributions
 figure; violin(spCorrMinT','bw',0.1,'facecolor','b','edgecolor',[]);
-ylim([-1.2 1]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
+ylim([-1.2 1.2]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
 
 % Show the data points
 pointSize = size(spCorrMinT);
@@ -361,7 +361,7 @@ spCorrMinFC                   = (cat(2,spCorrMinFC{:}));
 
 % Show the distributions
 figure; violin(spCorrMinFC','bw',0.1,'facecolor','b','edgecolor',[]);
-ylim([-1.2 1]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
+ylim([-1.2 1.2]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on; 
 
 % Show the data points
 pointSize = size(spCorrMinFC);
@@ -370,6 +370,61 @@ y1 = reshape(spCorrMinFC',[pointSize(2)*5 1]);
 s = swarmchart(x1,y1,5,'b','filled');
 s.XJitterWidth = 0.5; box off;
 xticks(1:5);xticklabels({'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
+
+%% Grouping spatial data for both animals 
+for iMonkey = 1:3
+    if iMonkey~=3
+        spatialCorrVar = animalData(iMonkey).spCorrMinT; 
+        fcCorrVar      = animalData(iMonkey).spCorrMinFC; 
+    else
+        spatialCorrVar = [animalData(1).spCorrMinT animalData(2).spCorrMinT ];
+        fcCorrVar      = [animalData(1).spCorrMinFC animalData(2).spCorrMinFC];
+    end
+    figure;
+    for iFig =1:2
+        switch iFig 
+            case 1
+                plotVar = spatialCorrVar;
+                figTitle = 'Cross-modal to FC correlation';
+            case 2
+                plotVar = fcCorrVar; 
+                figTitle = 'FC to FC correlations ';
+        end
+
+        subplot(1,2,iFig);
+        violin(plotVar','bw',0.1,'facecolor','b','edgecolor',[]);
+        ylim([-1.2 1.2]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on;
+        title(figTitle);
+
+        % Show the data points
+        pointSize = size(plotVar);
+        x1 = (reshape(repmat(1:5,[pointSize(2) 1]),[pointSize(2)*5 1]));
+        y1 = reshape(plotVar',[pointSize(2)*5 1]);
+        s = swarmchart(x1,y1,5,'b','filled');
+        s.XJitterWidth = 0.5; box off;
+        xticks(1:5);xticklabels({'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
+        legend off;
+        % Statistics
+
+        if iMonkey==1
+            sgtitle('Charlie Sheen');
+        elseif iMonkey==2
+            sgtitle('Whiskey');
+        else
+            sgtitle('Combined');
+        end
+
+        [pSpCorrT{iFig,iMonkey},tblSpCorrT{iFig,iMonkey},statsSpCorrT] = anova1(plotVar',{'0.5', '1', '2', '3' , '4'},'off');
+        [rSpCorrT,~,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.01,"Display","off");
+
+        tblSpCorrMT{iFig,iMonkey} = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
+            "Difference","Upper limit","p-val"]);
+        tblSpCorrMT{iFig,iMonkey}.("Group") = gnamesSpCorrT(tblSpCorrMT{iFig,iMonkey}.("Group"));
+        tblSpCorrMT{iFig,iMonkey}.("Control Group") = gnamesSpCorrT(tblSpCorrMT{iFig,iMonkey}.("Control Group"));
+
+    end
+    
+end
 
 %%
 %%%%%%%%%%%%%%%%%%%%%%%%%% Temporal controls %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -769,6 +824,7 @@ for iDate = 1:size(allDates,1)
             end
         end
         lowIdx = lags<0 & lags>=-80;
+        lowFcIdx = lags<0 & lags>=-80;
         xLow   = lags(lowIdx);
         [magLowElec,lagIdx] = min(median(roiElec(lowIdx,:),2,'omitnan'));
         lagLowElec = xLow(lagIdx)./10;
@@ -815,6 +871,9 @@ for iDate = 1:size(allDates,1)
                         magLow(iShift,iPoint) = NaN;
                         lagLow(iShift,iPoint) = NaN;
 
+                        magLowFc(iShift,iPoint) = NaN;
+                        lagLowFc(iShift,iPoint) = NaN;
+
                     else % Get FC maps
                         seed = loc(iPoint,:);
                         clipMask_seed = ~corrMask(seed(2)-seedRad:seed(2)+seedRad,seed(1)-seedRad:seed(1)+seedRad);
@@ -828,6 +887,11 @@ for iDate = 1:size(allDates,1)
                             loc(iPoint,:)         = NaN;
                             magLow(iShift,iPoint) = NaN;
                             lagLow(iShift,iPoint) = NaN;
+
+                            magLowFc(iShift,iPoint) = NaN;
+                            lagLowFc(iShift,iPoint) = NaN;
+
+
                             continue;
 
                         else
@@ -843,21 +907,32 @@ for iDate = 1:size(allDates,1)
                                     [ccROI(:,iP),lags(:,iP)]  = xcorr(infraEphys',inDat(iP,:),200,'normalized');
                                 else
                                     [ccROI(:,iP),~]  = xcorr(infraEphys',inDat(iP,:),200,'normalized');
+                                    [ccFcROI(:,iP),~]  = xcorr(roiDat(iP,:),inDat(iP,:),200,'normalized');
                                 end
                             end
 
                             roiVals{iShift,iPoint} = reshape(ccROI,[401 inDatSize(1) inDatSize(2)]);
                             ccProfile(iShift,iPoint,:) = median(ccROI,2,'omitnan');
+
+                            ccProfileFc(iShift,iPoint,:) = median(ccFcROI,2,'omitnan');
                             % Set the lag limit to determine peak negative
                             xLow   = lags(lowIdx);
                             [magLow(iShift,iPoint),lagIdx] = min(median(ccROI(lowIdx,:),2,'omitnan'));
                             lagLow(iShift,iPoint) = xLow(lagIdx)./10;
+
+                            xFcLow = lags(lowFcIdx);
+                            [magLowFc(iShift,iPoint),lagIdxFc] = max(median(ccFcROI(lowFcIdx,:),2,'omitnan'));
+                            lagLowFc(iShift,iPoint) = xFcLow(lagIdxFc)./10;
                         end
                     end
                 else
                     magLow(iShift,iPoint) = NaN;
                     lagLow(iShift,iPoint) = NaN;
                     ccProfile(iShift,iPoint,1:401) = NaN;
+
+                     magLowFc(iShift,iPoint) = NaN;
+                    lagLowFc(iShift,iPoint) = NaN;
+                    ccProfileFc(iShift,iPoint,1:401) = NaN;
                 end
                 locVals{iDate,iRun,iShift} = loc;
             end
@@ -865,6 +940,10 @@ for iDate = 1:size(allDates,1)
         magLowAll{iDate,iRun} = magLow;
         lagLowAll{iDate,iRun} = lagLow; 
         ccProfileAll{iDate,iRun} = ccProfile;
+
+        magLowFcAll{iDate,iRun} = magLowFc;
+        lagLowFcAll{iDate,iRun} = lagLowFc; 
+        ccProfileFcAll{iDate,iRun} = ccProfileFc;
     end
 end
 
@@ -922,6 +1001,64 @@ magLowT(~goodRunsSpatial) = []; % Remove bad recordings
 magLowT = -(cat(2,magLowT{:})); % Pool the data
 
 save(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\tempControlsROI.mat'],'magLowT','magLowAll','ccProfile','lags');
+
+
+magLowFcT = reshape(cellfun(@(x) x./abs(max(x,[],'all','omitnan')),magLowFcAll,'un',0),[size(magLowFcAll,1)*size(magLowFcAll,2) 1]);
+zeroIndFc    = cell2mat(cellfun(@(x) isempty(x),magLowFcT,'un',0));
+
+magLowFcT(zeroIndFc)          = [];
+magLowFcT(~goodRunsSpatial) = []; % Remove bad recordings
+
+magLowFcT = (cat(2,magLowFcT{:})); % Pool the data
+
+save(['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\tempControlsROI.mat'],'magLowFcT','magLowFcAll','ccProfileFcAll','-append');
+
+
+%% Combine both animals
+figure;
+for iMonkey = 1:3
+    if iMonkey~=3
+        % var = animalData(iMonkey).magLowT;
+        var = animalData(iMonkey).magLowFcT;
+    else
+        % var = [animalData(1).magLowT animalData(2).magLowT ];
+        var = [animalData(1).magLowFcT animalData(2).magLowFcT ];
+    end
+    subplot(1,3,iMonkey);
+
+    violin(var','bw',0.1,'facecolor','b','edgecolor',[]);
+    ylim([-1.2 1.2]);yticks(-1:0.2:1);xticklabels([0.5 1 2 3 4]); hold on;
+    % title(figTitle);
+
+    % Show the data points
+    pointSize = size(var);
+    x1 = (reshape(repmat(1:5,[pointSize(2) 1]),[pointSize(2)*5 1]));
+    y1 = reshape(var',[pointSize(2)*5 1]);
+    s = swarmchart(x1,y1,5,'b','filled');
+    s.XJitterWidth = 0.5; box off;
+    xticks(1:5);xticklabels({'0.5 mm' ; '1 mm'; '2 mm' ; '3 mm'; '4 mm'});
+    legend off;
+
+    % Statistics
+
+    if iMonkey==1
+        title('Charlie Sheen');
+    elseif iMonkey==2
+        title('Whiskey');
+    else
+        title('Combined');
+    end
+
+    [pTempCorrT{iMonkey},tblTempCorrT{iMonkey},statsSpCorrT] = anova1(var',{'0.5', '1', '2', '3' , '4'},'off');
+    [rSpCorrT,~,~,gnamesSpCorrT] = multcompare(statsSpCorrT,"CriticalValueType","bonferroni","Alpha", 0.01,"Display","off");
+
+    tblTempCorrMT{iMonkey} = array2table(rSpCorrT,"VariableNames",["Group","Control Group","Lower Limit",...
+        "Difference","Upper limit","p-val"]);
+    tblTempCorrMT{iMonkey}.("Group") = gnamesSpCorrT(tblTempCorrMT{iMonkey}.("Group"));
+    tblTempCorrMT{iMonkey}.("Control Group") = gnamesSpCorrT(tblTempCorrMT{iMonkey}.("Control Group"));
+
+end
+
 
 %% Statistics 
 
