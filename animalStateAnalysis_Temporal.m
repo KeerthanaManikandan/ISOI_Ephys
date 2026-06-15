@@ -134,41 +134,6 @@ params.pad      = -1;
 params.tapers   = [3 5];
 params.trialave = 0;
 
-%% Check data from NI-DAQ with LFP data
-iDate = 2; 
-iR = 4; iRun = 1;
-
-l = load(['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\Data\' monkeyID '_' monkeyName '_SqM' ...
-    '\Left Hemisphere\' daqOnly(iDate,:) '\run0' num2str(iR-1) '\' monkeyName '_' ...
-    daqOnlyExp(iDate,:) '_run0' num2str(iR-1) '_EEG_EKG_data.mat'],'storedData');
-
- eegDAQ = l.storedData(:,1);
-
- [spec,timeValsSpec,~] = mtspecgramc(eegDAQ,[5 3],params);
-
- % Remove bad time segments
- powMeanS = squeeze(sum(spec,2)); % Calculate cumulative powers
- badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1)); % Determine threshold bounds
- badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3; % Identify threshold crossings
- badTimes = [];
-
- % Extract 1 s interval before and after each threshold crossing
- if ~isempty(badTimeIndOld)
-     badTimes = [];
-     badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)'];
-
-     for iL = 1:size(badTimeInd,1)
-         badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
-     end
-     badTimes = unique(badTimes);
- end
-
- % Remove bad time segments
- eegDAQ(badTimes,:) = [];
-
- eegRipple = probe{iRun,iDate}.eegCh; 
-
-
 %% Get data from NI-DAQ only
 varHours     = NaN(5,12,'single');
 varMovAvg    = NaN(5,12,'single');
@@ -242,8 +207,8 @@ for iDate = 1:size(daqOnly,1)
                 end
             end
 
-            % Calculate edge frequencies (frequency where cumulative power>90%)
-            [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegStart,[2 1],params);
+            % Calculate edge frequencies (frequency where cumulative power>90% of total power)
+            [spec,~,freqValsSpec] = mtspecgramc(eegStart,[2 1],params);
             cumPowFreq = cumsum(spec,2);
             mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
             [~,highPowerIdx] = max(mat,[],2);
@@ -280,7 +245,7 @@ for iDate = 1:size(daqOnly,1)
 
 end
 
-%% Ripple
+%% Get EEG data from Ripple
 clear movAvg 
 for iDate = 1:size(rippleOnly,1)
     clear edgeFreqStart diffRange movAvg
@@ -368,16 +333,15 @@ for iDate = 1:size(rippleOnly,1)
       
 end
 
-%%
-% if iM == 2
-    animalData(iM).varHours     = varHours;
-    animalData(iM).varMovAvg    = varMovAvg;
-    animalData(iM).varDiffEnv   = varDiffEnv;
-    animalData(iM).meanMovAvg   = meanMovAvg;
-    animalData(iM).meanEdgeFreq = meanEdgeFreq;
-% end
+% Group data across both animals
+animalData(iM).varHours     = varHours;
+animalData(iM).varMovAvg    = varMovAvg;
+animalData(iM).varDiffEnv   = varDiffEnv;
+animalData(iM).meanMovAvg   = meanMovAvg;
+animalData(iM).meanEdgeFreq = meanEdgeFreq;
 
-%% Grouping all data
+
+%% Plotting data animal by animal
 
 for iM = 1:3
     if iM~=3
@@ -425,7 +389,7 @@ for iM = 1:3
     end
 end
 
-%%
+%% Plotting all data for both animals
  cols = 1:2:12;
 
 for iVar = 1:5
@@ -470,7 +434,7 @@ for iVar = 1:5
     xlabel('Hours'); ylabel('Edge frequency (Hz)');
 end
 
-%%
+%% Calculate the Mann-Kendall Tau statistical test to identify trend 
 for iVar = 1: 5
     switch iVar
         case 1
@@ -494,8 +458,12 @@ for iVar = 1: 5
 end
 
 
-%%
+%% Extract EEG data from Ripple 
 function [edgeFreq,diffRange,movAvg,eegDat] = getEEGDataRipple(datName)
+    % edgeFreq: edge frequency
+    % diffRange: difference between upper and lower envelope
+    % movAvg: smoothed version of edgeFreq
+    % eegDat: EEG data for the recording of interest 
 
     fs = 1e3;
     [b,a] = butter(3,[1 250]./(fs/2),'bandpass'); % Bandpass filtering parameters across 1-250 Hz
@@ -557,19 +525,19 @@ function [edgeFreq,diffRange,movAvg,eegDat] = getEEGDataRipple(datName)
     eegDat(badTimes,:) = [];
     
     % Calculate edge frequencies (frequency where cumulative power>90%)
-    [spec,timeValsSpec,freqValsSpec] = mtspecgramc(eegDat,[2 1],params);
+    [spec,~,freqValsSpec] = mtspecgramc(eegDat,[2 1],params);
     cumPowFreq = cumsum(spec,2);
     mat = cumPowFreq>= 0.9.*cumPowFreq(:,end);
     [~,highPowerIdx] = max(mat,[],2);
     edgeFreq= freqValsSpec(highPowerIdx);
     movAvg = smoothdata(movmean(edgeFreq,60));
     
-    [up,lo] = envelope(edgeFreq,60,'peak');
-    diffRange = up-lo;
+    [up,lo] = envelope(edgeFreq,60,'peak'); % Envelope
+    diffRange = up-lo;  % Difference in upper and lower envelope
 
 end
 
-%% 
+%% Boxplot function with data points
 function plotData(var,xLabel, yLabel)
 
     boxplot(var); hold on;
@@ -588,3 +556,37 @@ function plotData(var,xLabel, yLabel)
     ylabel(yLabel);
 
 end
+
+%% Check data from NI-DAQ with LFP data
+iDate = 2; 
+iR = 4; iRun = 1;
+
+l = load(['\\smb2.neurobio.pitt.edu\Gharbawie\Lab\Data\' monkeyID '_' monkeyName '_SqM' ...
+    '\Left Hemisphere\' daqOnly(iDate,:) '\run0' num2str(iR-1) '\' monkeyName '_' ...
+    daqOnlyExp(iDate,:) '_run0' num2str(iR-1) '_EEG_EKG_data.mat'],'storedData');
+
+ eegDAQ = l.storedData(:,1);
+
+ [spec,timeValsSpec,~] = mtspecgramc(eegDAQ,[5 3],params);
+
+ % Remove bad time segments
+ powMeanS = squeeze(sum(spec,2)); % Calculate cumulative powers
+ badTimeThresh   = (median(powMeanS,1)+4.5*mad(powMeanS,1,1)); % Determine threshold bounds
+ badTimeIndOld = floor(timeValsSpec(powMeanS>badTimeThresh))*1e3; % Identify threshold crossings
+ badTimes = [];
+
+ % Extract 1 s interval before and after each threshold crossing
+ if ~isempty(badTimeIndOld)
+     badTimes = [];
+     badTimeInd =[(badTimeIndOld-1e3)'  (badTimeIndOld+1e3)'];
+
+     for iL = 1:size(badTimeInd,1)
+         badTimes = [badTimes badTimeInd(iL,1): badTimeInd(iL,2)];
+     end
+     badTimes = unique(badTimes);
+ end
+
+ % Remove bad time segments
+ eegDAQ(badTimes,:) = [];
+
+ eegRipple = probe{iRun,iDate}.eegCh; 

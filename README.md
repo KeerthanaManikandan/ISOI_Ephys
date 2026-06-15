@@ -20,12 +20,13 @@ This repository contains all codes necessary to process and store RS data collec
 ## Dependent functions
 1. `getRSConnectivityMaps.m`:  Generates FC map averaged across multiple RS runs for a specific animal. 
 2. `getMonkeyParamsRS.m`: Initializes variables such as experiment date, runs, reference, folder locations.
-3. `getPreProcessedDataRestingState.m`: Processes and stores rs-ISOI data from experiments involving rs-ISOI only. 
+3. `getPreProcessedDataRestingState.m`: Processes and stores rs-ISOI data from experiments involving rs-ISOI only. Uses `getRegressors.m` file for removing nuisance signals.
 4. `getMasks.m`:Loads the masks for a specific run.
 5. `calculateSeedSignal.m`: Calculates the mean seed signal to generate FC map.
 6. `plotCorrMap.m`:Calculates the FC map for a seed given a seed signal.
 7. `removeBadTimesFromSpec.m`: This function removes the bad times determined from the spectrogram which have not been removed previously.
 8. `plotLagProfiles.m`: Plots the median cross-correlations as a function of lag and returns the peak negative correlations and lag. 
+9. `animalStateAnalysis_Temporal.m`: This script reads the EEG data for both animals, calculates the edge frequency and its variance per hour for each experiment. 
 
 ### Necessary folders
 - 01_Sunin: To process imaging data.
