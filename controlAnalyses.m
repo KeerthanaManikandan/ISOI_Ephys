@@ -311,7 +311,7 @@ for iDate = 1:size(allDates,1)
             xlabel('Distance from probe (mm)'); ylabel('Lag at peak negative correlation'); ylim([-11 3]);
 
             sgtitle(strrep(['FC maps vs Hybrid maps (varying lag) for ' monkeyName ' ' expDate ' ' runName],'_','\_'));
-            f = gcf; exportgraphics(f,[dataDir '\spatialControlFOV_v3.png'],'Resolution',300); close gcf;
+            f = gcf; exportgraphics(f,[dataDir '\spatialControlFOV_v2.png'],'Resolution',300); close gcf;
         end
     end
 end

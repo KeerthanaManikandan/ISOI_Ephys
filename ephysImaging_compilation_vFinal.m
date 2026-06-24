@@ -120,7 +120,6 @@ isoLevelSpatial = isoLevel; isoLevelSpatial(~goodRunsSpatial) = [];
 
 clc; disp(['All physiology and imaging data for ' monkeyName ' loaded']);
 
-
 %% Temporal correlations: Correlate rs-ISOI with LFP at ROI
 % This section calculates cross-correlations between rs-ISOI and LFP
 % (different frequency bands) within an ROI 
@@ -133,7 +132,7 @@ for iDate = 1:size(allDates,1)
     clear expDate;
     expDate = allDates(iDate,:); % Get experiment dates 
 
-    for iRun = 1:size(allRuns{iDate,1}) % Get individual runs within an experiment 
+    for iRun = 1:size(allRuns{iDate,1},1) % Get individual runs within an experiment 
         clear runName dataDir clipMask elecMask clipMaskCortex corrMask x negIdx lowIdx
         runName = allRuns{iDate,1}(iRun,:);
         dataDir = ['D:\Data\' monkeyName '_SqM\' hemisphere ' Hemisphere\' expDate '\' runName ];
