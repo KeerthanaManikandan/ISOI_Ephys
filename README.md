@@ -1,5 +1,6 @@
 # Read Me
 This repository contains all codes necessary to process and store RS data collected from ISOI and linear electrode array simultaneously.
+Data are publicly available on the DANDI Archive (RRID:SCR_017571) at the following URL: https://dandiarchive.org/dandiset/001874
 
 ## Main scripts
 1. `ephysImaging_compilation_vFinal.m`: Master script that performs temporal, spatial, laminar analysis for one animal.
